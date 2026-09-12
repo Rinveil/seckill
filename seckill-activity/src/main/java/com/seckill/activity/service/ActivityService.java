@@ -6,8 +6,8 @@ import com.seckill.activity.dto.ActivityCreateRequest;
 import com.seckill.activity.dto.ActivityUpdateRequest;
 import com.seckill.activity.dto.ActivityView;
 import com.seckill.activity.mapper.ActivityMapper;
-import com.seckill.activity.support.RedisStockKeys;
 import com.seckill.common.exception.BusinessException;
+import com.seckill.common.redis.SeckillRedisKeys;
 import com.seckill.common.result.ResultCode;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -77,18 +77,20 @@ public class ActivityService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "请先关闭活动再删除");
         }
         activityMapper.deleteById(id);
-        stringRedisTemplate.delete(RedisStockKeys.stock(id));
+        stringRedisTemplate.delete(SeckillRedisKeys.stock(id));
+        stringRedisTemplate.delete(SeckillRedisKeys.open(id));
     }
 
     public ActivityView open(String role, long id) {
         requireAdmin(role);
         Activity entity = requireActivity(id);
-        String key = RedisStockKeys.stock(id);
+        String key = SeckillRedisKeys.stock(id);
         if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "请先预热 Redis 库存再开抢");
         }
         entity.setStatus(Activity.STATUS_OPEN);
         activityMapper.updateById(entity);
+        stringRedisTemplate.opsForValue().set(SeckillRedisKeys.open(id), "1");
         return toView(entity);
     }
 
@@ -97,6 +99,7 @@ public class ActivityService {
         Activity entity = requireActivity(id);
         entity.setStatus(Activity.STATUS_CLOSED);
         activityMapper.updateById(entity);
+        stringRedisTemplate.delete(SeckillRedisKeys.open(id));
         return toView(entity);
     }
 
@@ -104,7 +107,7 @@ public class ActivityService {
     public ActivityView preheat(String role, long id) {
         requireAdmin(role);
         Activity entity = requireActivity(id);
-        stringRedisTemplate.opsForValue().set(RedisStockKeys.stock(id), String.valueOf(entity.getStock()));
+        stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stock(id), String.valueOf(entity.getStock()));
         return toView(entity);
     }
 
@@ -112,7 +115,7 @@ public class ActivityService {
     public ActivityView updateRedisStock(String role, long id, int stock) {
         requireAdmin(role);
         requireActivity(id);
-        String key = RedisStockKeys.stock(id);
+        String key = SeckillRedisKeys.stock(id);
         if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "尚未预热，请先预热再改 Redis 库存");
         }
@@ -156,7 +159,7 @@ public class ActivityService {
     }
 
     private Integer readRedisStock(long activityId) {
-        String raw = stringRedisTemplate.opsForValue().get(RedisStockKeys.stock(activityId));
+        String raw = stringRedisTemplate.opsForValue().get(SeckillRedisKeys.stock(activityId));
         if (raw == null || raw.isBlank()) {
             return null;
         }

@@ -26,6 +26,24 @@ spec:
               value: "-Xms128m -Xmx256m"
             - name: SERVER_PORT
               value: "8083"
+            - name: SPRING_DATA_REDIS_HOST
+              value: redis
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            - name: SPRING_RABBITMQ_HOST
+              value: rabbitmq
+            - name: SPRING_RABBITMQ_PORT
+              value: "5672"
+            - name: SPRING_RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: seckill-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: seckill-secrets
+                  key: RABBITMQ_DEFAULT_PASS
           resources:
             requests:
               memory: 256Mi
@@ -37,13 +55,14 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: 8083
-            initialDelaySeconds: 20
+            initialDelaySeconds: 25
             periodSeconds: 10
+            failureThreshold: 12
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: 8083
-            initialDelaySeconds: 40
+            initialDelaySeconds: 50
             periodSeconds: 20
 ---
 apiVersion: v1

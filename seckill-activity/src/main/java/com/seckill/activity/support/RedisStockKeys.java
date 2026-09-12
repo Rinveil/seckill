@@ -1,12 +1,18 @@
 package com.seckill.activity.support;
 
-/** Redis 库存 key，需与后续 core Lua 预扣保持一致。 */
+import com.seckill.common.redis.SeckillRedisKeys;
+
+/** @deprecated 使用 {@link SeckillRedisKeys}；保留转发以免遗漏引用。 */
 public final class RedisStockKeys {
 
     private RedisStockKeys() {
     }
 
     public static String stock(long activityId) {
-        return "seckill:stock:" + activityId;
+        return SeckillRedisKeys.stock(activityId);
+    }
+
+    public static String open(long activityId) {
+        return SeckillRedisKeys.open(activityId);
     }
 }
