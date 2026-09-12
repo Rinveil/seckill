@@ -25,7 +25,7 @@ public class SeckillController {
     @PostMapping("/{activityId}")
     public Result<Map<String, Object>> grab(
             @PathVariable long activityId,
-            @RequestHeader(value = "X-User-Id", defaultValue = "10001") long userId
+            @RequestHeader("X-User-Id") long userId
     ) {
         return Result.ok(seckillService.grab(activityId, userId));
     }

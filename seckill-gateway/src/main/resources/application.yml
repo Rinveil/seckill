@@ -31,6 +31,15 @@ spring:
           predicates:
             - Path=/api/order/**
 
+seckill:
+  jwt:
+    secret: ${JWT_SECRET}
+  auth:
+    whitelist:
+      - /api/user/login
+      - /api/user/register
+      - /actuator
+
 management:
   endpoints:
     web:
