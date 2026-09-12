@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: seckill-gateway
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+      routes:
+        - id: user
+          uri: http://127.0.0.1:8081
+          predicates:
+            - Path=/api/user/**
+        - id: activity
+          uri: http://127.0.0.1:8082
+          predicates:
+            - Path=/api/activity/**
+        - id: seckill
+          uri: http://127.0.0.1:8083
+          predicates:
+            - Path=/api/seckill/**
+        - id: order
+          uri: http://127.0.0.1:8084
+          predicates:
+            - Path=/api/order/**
