@@ -25,10 +25,11 @@ K8s 空壳部署见 [infra/k8s/README.md](infra/k8s/README.md)。
 3. 部署：`kubectl apply -f infra/k8s/`  
 4. 浏览器：http://localhost:30080  
 
-### 用户 API（第 2 步）
+### 用户 / 前端（第 2–4 步）
 
-- `POST /api/user/register` `{"username":"u1","password":"pass123"}` → 仅 USER + JWT  
-- `POST /api/user/login` `{"username":"admin","password":"admin123"}` → 种子 ADMIN  
-- `GET /api/user/me` Header: `Authorization: Bearer <token>`  
+- 登录页：http://localhost:30080/login （种子 `admin` / `admin123`）  
+- `POST /api/user/register|login`，`GET /api/user/me`（需 Bearer）  
+- 网关校验 JWT，注入 `X-User-Id` / `X-User-Role`  
+- B 端：运营占位 + 自测抢购；Token 存 localStorage  
 
 密钥来自 K8s Secret（`JWT_SECRET` / MySQL 密码等），不写在业务配置明文里。
