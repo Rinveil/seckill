@@ -4,7 +4,7 @@
 
 要点：K8s 全容器（arm64 / NodePort / PVC）；共享 MySQL + **MyBatis-Plus**；JWT；限流与压测后置。  
 产品：注册仅 USER + 种子 ADMIN；活动开/关；直接改 Redis 库存；限购 1；Mock 支付成功；取消回滚库存；落单失败自动回滚。  
-流程约定：每完成一步 → commit → **push 远程**。
+流程约定：每完成一步 → commit → **push 远程** →（Mac self-hosted runner）自动构建部署，见 [ci-cd.md](./ci-cd.md)。
 
 1. K8s 最小可部署空壳  
 2. 共享 MySQL + `user`（用户名 + JWT + 种子 ADMIN，MyBatis-Plus）  

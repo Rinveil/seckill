@@ -11,16 +11,26 @@ cd "$ROOT"
 echo "==> context: $(kubectl config current-context)"
 kubectl apply -f infra/k8s/
 
+# 同 tag 镜像更新后必须重启，否则 IfNotPresent 不会换新层
+echo "==> restart app deployments to pick up new images"
+kubectl -n seckill rollout restart \
+  deploy/seckill-user \
+  deploy/seckill-activity \
+  deploy/seckill-core \
+  deploy/seckill-order \
+  deploy/seckill-gateway \
+  deploy/seckill-web || true
+
 echo "==> waiting for deployments..."
 kubectl -n seckill rollout status deploy/mysql --timeout=180s || true
 kubectl -n seckill rollout status deploy/redis --timeout=120s || true
 kubectl -n seckill rollout status deploy/rabbitmq --timeout=180s || true
-kubectl -n seckill rollout status deploy/seckill-user --timeout=180s
-kubectl -n seckill rollout status deploy/seckill-activity --timeout=180s
-kubectl -n seckill rollout status deploy/seckill-core --timeout=180s
-kubectl -n seckill rollout status deploy/seckill-order --timeout=180s
-kubectl -n seckill rollout status deploy/seckill-gateway --timeout=180s
-kubectl -n seckill rollout status deploy/seckill-web --timeout=120s
+kubectl -n seckill rollout status deploy/seckill-user --timeout=240s
+kubectl -n seckill rollout status deploy/seckill-activity --timeout=240s
+kubectl -n seckill rollout status deploy/seckill-core --timeout=240s
+kubectl -n seckill rollout status deploy/seckill-order --timeout=240s
+kubectl -n seckill rollout status deploy/seckill-gateway --timeout=240s
+kubectl -n seckill rollout status deploy/seckill-web --timeout=180s
 
 echo "==> pods:"
 kubectl -n seckill get pods
