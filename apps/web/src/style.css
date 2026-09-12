@@ -1,30 +1,86 @@
 :root {
-  font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", sans-serif;
-  color: #1a1a1a;
-  background: #f6f3ee;
+  color: #303133;
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f7fa;
 }
+
 * { box-sizing: border-box; }
 body { margin: 0; }
-.shell { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
-header h1 { margin: 0 0 20px; font-size: 22px; }
-.card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 6%);
+a { color: #409eff; text-decoration: none; }
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(160deg, #e8eef7, #f5f7fa 55%, #eef2f8);
 }
-.price { color: #e23c3c; font-size: 28px; font-weight: 700; }
-.origin { color: #999; text-decoration: line-through; margin-left: 8px; }
-.btn {
-  width: 100%;
-  border: 0;
-  border-radius: 999px;
-  padding: 14px;
-  font-size: 16px;
+
+.auth-card {
+  width: 400px;
+}
+
+.auth-card h2 {
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+.auth-tip {
+  margin: 16px 0 0;
+  color: #909399;
+  font-size: 13px;
+  text-align: center;
+}
+
+.admin-shell {
+  min-height: 100vh;
+}
+
+.admin-aside {
+  background: #001529;
   color: #fff;
-  background: linear-gradient(90deg, #ff4d4f, #ff7a45);
-  cursor: pointer;
+  min-height: 100vh;
 }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.muted { color: #888; }
-a { color: inherit; text-decoration: none; }
+
+.admin-aside .brand {
+  padding: 20px 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.admin-aside .el-menu {
+  border-right: none;
+  background: transparent;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #fff;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.price {
+  color: #f56c6c;
+  font-size: 22px;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.origin {
+  color: #909399;
+  text-decoration: line-through;
+}
+
+.muted {
+  color: #909399;
+}

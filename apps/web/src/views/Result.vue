@@ -1,9 +1,14 @@
 <template>
-  <div class="card">
-    <h2>{{ ok ? '抢购成功' : '未能抢到' }}</h2>
-    <p class="muted">{{ msg }}</p>
-    <router-link to="/"><button class="btn">返回首页</button></router-link>
-  </div>
+  <el-result
+    :icon="ok ? 'success' : 'error'"
+    :title="ok ? '抢购成功' : '抢购失败'"
+    :sub-title="msg || ''"
+  >
+    <template #extra>
+      <el-button type="primary" @click="$router.push('/seckill')">返回会场</el-button>
+      <el-button @click="$router.push('/ops/orders')">查看订单</el-button>
+    </template>
+  </el-result>
 </template>
 
 <script setup>
@@ -12,5 +17,5 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const ok = computed(() => route.query.ok === '1')
-const msg = computed(() => route.query.msg || (ok.value ? '订单正在生成' : '手慢了'))
+const msg = computed(() => route.query.msg || '')
 </script>

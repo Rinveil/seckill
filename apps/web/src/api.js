@@ -1,19 +1,82 @@
-const API = ''
+const TOKEN_KEY = 'seckill_token'
+const USER_KEY = 'seckill_user'
 
-export async function getActivities() {
-  const res = await fetch(`${API}/api/activity/list`)
-  return res.json()
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || ''
 }
 
-export async function getActivity(id) {
-  const res = await fetch(`${API}/api/activity/${id}`)
-  return res.json()
+export function getUser() {
+  const raw = localStorage.getItem(USER_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
 }
 
-export async function grab(activityId) {
-  const res = await fetch(`${API}/api/seckill/${activityId}`, {
-    method: 'POST',
-    headers: { 'X-User-Id': '10001' }
-  })
-  return res.json()
+export function setAuth(payload) {
+  if (payload?.token) {
+    localStorage.setItem(TOKEN_KEY, payload.token)
+  }
+  localStorage.setItem(USER_KEY, JSON.stringify({
+    userId: payload.userId,
+    username: payload.username,
+    role: payload.role,
+    nickname: payload.nickname
+  }))
+}
+
+export function clearAuth() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(USER_KEY)
+}
+
+export function isLoggedIn() {
+  return Boolean(getToken())
+}
+
+async function request(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  }
+  const token = getToken()
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  const res = await fetch(path, { ...options, headers })
+  const data = await res.json().catch(() => ({ code: res.status, message: '请求失败', data: null }))
+  if (res.status === 401 || data.code === 401) {
+    clearAuth()
+  }
+  return data
+}
+
+export function login(body) {
+  return request('/api/user/login', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function register(body) {
+  return request('/api/user/register', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function me() {
+  return request('/api/user/me')
+}
+
+export function getActivities() {
+  return request('/api/activity/list')
+}
+
+export function getActivity(id) {
+  return request(`/api/activity/${id}`)
+}
+
+export function grab(activityId) {
+  return request(`/api/seckill/${activityId}`, { method: 'POST' })
+}
+
+export function getOrders() {
+  return request('/api/order/list')
 }
