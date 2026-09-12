@@ -5,10 +5,11 @@ import java.time.Instant;
 public record ActivityView(
         long id,
         String title,
-        String cover,
         int priceFen,
         int originPriceFen,
         int stock,
+        Integer redisStock,
+        String status,
         Instant startAt,
         Instant endAt
 ) {

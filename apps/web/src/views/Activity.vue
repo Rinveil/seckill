@@ -1,9 +1,18 @@
 <template>
   <el-card>
     <h3>{{ item?.title || '秒杀会场' }}</h3>
+    <p class="muted">
+      状态：{{ item?.status === 'OPEN' ? '开' : '关' }}
+      · 库存 {{ item?.redisStock == null ? `DB ${item?.stock ?? '-'}` : `Redis ${item.redisStock}` }}
+    </p>
     <p class="muted">{{ countdown }}</p>
-    <el-button type="danger" :disabled="!started || loading" :loading="loading" @click="onGrab">
-      {{ started ? '立即抢购' : '等待开始' }}
+    <el-button
+      type="danger"
+      :disabled="!canGrab || loading"
+      :loading="loading"
+      @click="onGrab"
+    >
+      {{ grabLabel }}
     </el-button>
     <div style="margin-top: 12px">
       <el-button link type="primary" @click="$router.push('/seckill')">返回列表</el-button>
@@ -25,6 +34,13 @@ const loading = ref(false)
 let timer
 
 const started = computed(() => item.value && now.value >= Date.parse(item.value.startAt))
+const canGrab = computed(() => item.value?.status === 'OPEN' && started.value)
+const grabLabel = computed(() => {
+  if (!item.value) return '加载中'
+  if (item.value.status !== 'OPEN') return '活动未开抢'
+  if (!started.value) return '等待开始'
+  return '立即抢购'
+})
 const countdown = computed(() => {
   if (!item.value) return ''
   const diff = Date.parse(item.value.startAt) - now.value

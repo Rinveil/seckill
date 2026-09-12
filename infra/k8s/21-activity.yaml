@@ -26,6 +26,19 @@ spec:
               value: "-Xms128m -Xmx256m"
             - name: SERVER_PORT
               value: "8082"
+            - name: MYSQL_URL
+              value: jdbc:mysql://mysql:3306/seckill?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+            - name: MYSQL_USER
+              value: root
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: seckill-secrets
+                  key: MYSQL_ROOT_PASSWORD
+            - name: SPRING_DATA_REDIS_HOST
+              value: redis
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
           resources:
             requests:
               memory: 256Mi
@@ -37,13 +50,14 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: 8082
-            initialDelaySeconds: 20
+            initialDelaySeconds: 25
             periodSeconds: 10
+            failureThreshold: 12
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: 8082
-            initialDelaySeconds: 40
+            initialDelaySeconds: 50
             periodSeconds: 20
 ---
 apiVersion: v1

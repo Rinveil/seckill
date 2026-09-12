@@ -73,6 +73,34 @@ export function getActivity(id) {
   return request(`/api/activity/${id}`)
 }
 
+export function createActivity(body) {
+  return request('/api/activity', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function updateActivity(id, body) {
+  return request(`/api/activity/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+}
+
+export function deleteActivity(id) {
+  return request(`/api/activity/${id}`, { method: 'DELETE' })
+}
+
+export function openActivity(id) {
+  return request(`/api/activity/${id}/open`, { method: 'POST' })
+}
+
+export function closeActivity(id) {
+  return request(`/api/activity/${id}/close`, { method: 'POST' })
+}
+
+export function preheatActivity(id) {
+  return request(`/api/activity/${id}/preheat`, { method: 'POST' })
+}
+
+export function updateRedisStock(id, body) {
+  return request(`/api/activity/${id}/redis-stock`, { method: 'PUT', body: JSON.stringify(body) })
+}
+
 export function grab(activityId) {
   return request(`/api/seckill/${activityId}`, { method: 'POST' })
 }
