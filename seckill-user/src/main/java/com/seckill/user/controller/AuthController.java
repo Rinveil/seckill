@@ -1,30 +1,40 @@
 package com.seckill.user.controller;
 
 import com.seckill.common.result.Result;
+import com.seckill.user.dto.AuthResponse;
 import com.seckill.user.dto.LoginRequest;
+import com.seckill.user.dto.RegisterRequest;
+import com.seckill.user.service.AuthService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/user")
 public class AuthController {
 
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+
+    @PostMapping("/register")
+    public Result<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        return Result.ok(authService.register(request));
+    }
+
     @PostMapping("/login")
-    public Result<Map<String, String>> login(@RequestBody LoginRequest request) {
-        return Result.ok(Map.of(
-                "token", UUID.randomUUID().toString().replace("-", ""),
-                "mobile", request.mobile() == null ? "13800000000" : request.mobile()
-        ));
+    public Result<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        return Result.ok(authService.login(request));
     }
 
     @GetMapping("/me")
-    public Result<Map<String, Object>> me() {
-        return Result.ok(Map.of("userId", 10001, "nickname", "秒杀用户"));
+    public Result<AuthResponse> me(@RequestHeader(value = "Authorization", required = false) String authorization) {
+        return Result.ok(authService.me(authorization));
     }
 }

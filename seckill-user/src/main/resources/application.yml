@@ -1,5 +1,42 @@
 server:
   port: 8081
+
 spring:
   application:
     name: seckill-user
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://mysql:3306/seckill?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+seckill:
+  jwt:
+    secret: ${JWT_SECRET}
+    expire-hours: ${JWT_EXPIRE_HOURS:2}
+  seed-admin:
+    username: ${SEED_ADMIN_USERNAME:admin}
+    password: ${SEED_ADMIN_PASSWORD:admin123}
+    nickname: ${SEED_ADMIN_NICKNAME:管理员}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true

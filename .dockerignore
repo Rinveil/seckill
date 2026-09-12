@@ -1,0 +1,13 @@
+# build context
+.git
+.idea
+.cursor
+**/target
+**/node_modules
+**/dist
+*.md
+docs
+agent-transcripts
+.DS_Store
+**/.env
+**/.env.*

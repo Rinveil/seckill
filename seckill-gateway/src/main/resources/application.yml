@@ -15,18 +15,28 @@ spring:
             allowCredentials: true
       routes:
         - id: user
-          uri: http://127.0.0.1:8081
+          uri: ${SECKILL_USER_URI:http://seckill-user:8081}
           predicates:
             - Path=/api/user/**
         - id: activity
-          uri: http://127.0.0.1:8082
+          uri: ${SECKILL_ACTIVITY_URI:http://seckill-activity:8082}
           predicates:
             - Path=/api/activity/**
         - id: seckill
-          uri: http://127.0.0.1:8083
+          uri: ${SECKILL_CORE_URI:http://seckill-core:8083}
           predicates:
             - Path=/api/seckill/**
         - id: order
-          uri: http://127.0.0.1:8084
+          uri: ${SECKILL_ORDER_URI:http://seckill-order:8084}
           predicates:
             - Path=/api/order/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true

@@ -21,3 +21,8 @@ apps/web/dist/
 
 logs/
 *.swp
+
+# Cursor：忽略本地状态，保留项目 rules
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**

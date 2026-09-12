@@ -1,4 +1,9 @@
 package com.seckill.user.dto;
 
-public record LoginRequest(String mobile, String code) {
+import jakarta.validation.constraints.NotBlank;
+
+public record LoginRequest(
+        @NotBlank String username,
+        @NotBlank String password
+) {
 }
