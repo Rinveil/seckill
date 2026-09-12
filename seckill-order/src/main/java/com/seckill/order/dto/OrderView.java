@@ -1,4 +1,13 @@
 package com.seckill.order.dto;
 
-public record OrderView(String orderNo, long activityId, String status, int amountFen) {
+import java.time.Instant;
+
+public record OrderView(
+        String orderNo,
+        long userId,
+        long activityId,
+        String status,
+        int amountFen,
+        Instant createdAt
+) {
 }

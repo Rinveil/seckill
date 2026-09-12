@@ -1,4 +1,4 @@
-package com.seckill.core.config;
+package com.seckill.order.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;

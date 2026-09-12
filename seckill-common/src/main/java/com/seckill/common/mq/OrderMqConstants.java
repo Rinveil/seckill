@@ -1,6 +1,6 @@
-package com.seckill.core.mq;
+package com.seckill.common.mq;
 
-/** 与 order 消费端约定：direct 交换机 + 建单队列。 */
+/** core 生产 / order 消费共用。 */
 public final class OrderMqConstants {
 
     public static final String EXCHANGE = "seckill.order";

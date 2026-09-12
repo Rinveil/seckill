@@ -2,8 +2,8 @@ package com.seckill.core.service;
 
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.result.ResultCode;
-import com.seckill.core.mq.OrderCreateMessage;
-import com.seckill.core.mq.OrderMqConstants;
+import com.seckill.common.mq.OrderCreateMessage;
+import com.seckill.common.mq.OrderMqConstants;
 import com.seckill.core.redis.StockLuaExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

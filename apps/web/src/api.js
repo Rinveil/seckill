@@ -108,3 +108,15 @@ export function grab(activityId) {
 export function getOrders() {
   return request('/api/order/list')
 }
+
+export function getOrder(orderNo) {
+  return request(`/api/order/${orderNo}`)
+}
+
+export function payOrder(orderNo) {
+  return request(`/api/order/${orderNo}/pay`, { method: 'POST' })
+}
+
+export function cancelOrder(orderNo) {
+  return request(`/api/order/${orderNo}/cancel`, { method: 'POST' })
+}

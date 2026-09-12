@@ -1,6 +1,7 @@
 package com.seckill.core.redis;
 
 import com.seckill.common.redis.SeckillRedisKeys;
+import com.seckill.common.redis.StockRollbackHelper;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
@@ -17,7 +18,6 @@ import java.util.List;
 public class StockLuaExecutor {
 
     private static final DefaultRedisScript<Long> DEDUCT_SCRIPT = new DefaultRedisScript<>();
-    private static final DefaultRedisScript<Long> ROLLBACK_SCRIPT = new DefaultRedisScript<>();
 
     static {
         DEDUCT_SCRIPT.setResultType(Long.class);
@@ -36,17 +36,6 @@ public class StockLuaExecutor {
                         redis.call('DECR', KEYS[1])
                         redis.call('SET', KEYS[2], '1')
                         return stock - 1
-                        """
-        );
-        ROLLBACK_SCRIPT.setResultType(Long.class);
-        ROLLBACK_SCRIPT.setScriptText(
-                """
-                        if redis.call('EXISTS', KEYS[2]) == 1 then
-                          redis.call('DEL', KEYS[2])
-                          redis.call('INCR', KEYS[1])
-                          return 1
-                        end
-                        return 0
                         """
         );
     }
@@ -68,11 +57,6 @@ public class StockLuaExecutor {
     }
 
     public long rollback(long activityId, long userId) {
-        List<String> keys = Arrays.asList(
-                SeckillRedisKeys.stock(activityId),
-                SeckillRedisKeys.bought(activityId, userId)
-        );
-        Long result = stringRedisTemplate.execute(ROLLBACK_SCRIPT, keys);
-        return result == null ? 0L : result;
+        return StockRollbackHelper.rollback(stringRedisTemplate, activityId, userId);
     }
 }
