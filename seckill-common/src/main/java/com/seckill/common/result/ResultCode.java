@@ -10,7 +10,8 @@ public enum ResultCode {
     NOT_STARTED(1003, "活动未开始"),
     DUPLICATE(1004, "请勿重复下单"),
     USERNAME_EXISTS(1005, "用户名已存在"),
-    LOGIN_FAILED(1006, "用户名或密码错误");
+    LOGIN_FAILED(1006, "用户名或密码错误"),
+    ACCOUNT_DISABLED(1007, "账号已禁用");
 
     private final int code;
     private final String message;

@@ -30,6 +30,7 @@ public class UserSchemaAndSeedRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         ensureUserTable();
+        ensureStatusColumn();
         authService.ensureAdmin(
                 seedAdminProperties.username(),
                 seedAdminProperties.password(),
@@ -68,9 +69,24 @@ public class UserSchemaAndSeedRunner implements ApplicationRunner {
                             password_hash VARCHAR(100) NOT NULL,
                             role VARCHAR(16) NOT NULL,
                             nickname VARCHAR(64) NOT NULL,
+                            status TINYINT NOT NULL DEFAULT 1,
                             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                         )
                         """
         );
+    }
+
+    private void ensureStatusColumn() {
+        Integer hasStatus = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*) FROM information_schema.columns
+                        WHERE table_schema = DATABASE() AND table_name = 't_user' AND column_name = 'status'
+                        """,
+                Integer.class
+        );
+        if (hasStatus != null && hasStatus == 0) {
+            log.warn("adding status column to existing t_user");
+            jdbcTemplate.execute("ALTER TABLE t_user ADD COLUMN status TINYINT NOT NULL DEFAULT 1");
+        }
     }
 }

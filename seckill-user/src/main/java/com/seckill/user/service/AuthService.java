@@ -16,12 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 public class AuthService {
 
     public static final String ROLE_USER = "USER";
     public static final String ROLE_ADMIN = "ADMIN";
+    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
@@ -42,7 +44,8 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(ROLE_USER);
         user.setNickname(nickname);
-        user.setCreatedAt(LocalDateTime.now());
+        user.setStatus(UserAccount.STATUS_ENABLED);
+        user.setCreatedAt(LocalDateTime.now(ZONE));
 
         try {
             userMapper.insert(user);
@@ -60,6 +63,7 @@ public class AuthService {
         if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BusinessException(ResultCode.LOGIN_FAILED);
         }
+        assertEnabled(user);
         String token = jwtService.issue(user.getId(), user.getUsername(), user.getRole());
         return new AuthResponse(token, user.getId(), user.getUsername(), user.getRole(), user.getNickname());
     }
@@ -72,6 +76,7 @@ public class AuthService {
         if (user == null) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
+        assertEnabled(user);
         return new AuthResponse(null, user.getId(), user.getUsername(), user.getRole(), user.getNickname());
     }
 
@@ -86,8 +91,15 @@ public class AuthService {
         admin.setPasswordHash(passwordEncoder.encode(rawPassword));
         admin.setRole(ROLE_ADMIN);
         admin.setNickname(nickname);
-        admin.setCreatedAt(LocalDateTime.now());
+        admin.setStatus(UserAccount.STATUS_ENABLED);
+        admin.setCreatedAt(LocalDateTime.now(ZONE));
         userMapper.insert(admin);
+    }
+
+    private static void assertEnabled(UserAccount user) {
+        if (user.getStatus() != null && user.getStatus() == UserAccount.STATUS_DISABLED) {
+            throw new BusinessException(ResultCode.ACCOUNT_DISABLED);
+        }
     }
 
     private static String extractBearer(String authorizationHeader) {

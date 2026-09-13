@@ -12,6 +12,9 @@ import java.time.LocalDateTime;
 @TableName("t_user")
 public class UserAccount {
 
+    public static final int STATUS_DISABLED = 0;
+    public static final int STATUS_ENABLED = 1;
+
     @TableId(type = IdType.AUTO)
     private Long id;
 
@@ -23,6 +26,9 @@ public class UserAccount {
     private String role;
 
     private String nickname;
+
+    /** 0=禁用 1=启用 */
+    private Integer status;
 
     @TableField("created_at")
     private LocalDateTime createdAt;

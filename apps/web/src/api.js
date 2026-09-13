@@ -154,3 +154,29 @@ export function payOrder(orderNo) {
 export function cancelOrder(orderNo) {
   return request(`/api/order/${orderNo}/cancel`, { method: 'POST' })
 }
+
+export function getUsers(params = {}) {
+  const q = new URLSearchParams()
+  if (params.keyword) q.set('keyword', params.keyword)
+  if (params.role) q.set('role', params.role)
+  if (params.status) q.set('status', params.status)
+  q.set('page', String(params.page || 1))
+  q.set('size', String(params.size || 20))
+  return request(`/api/user/admin/list?${q.toString()}`)
+}
+
+export function createUser(body) {
+  return request('/api/user/admin', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function updateUser(id, body) {
+  return request(`/api/user/admin/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+}
+
+export function updateUserStatus(id, body) {
+  return request(`/api/user/admin/${id}/status`, { method: 'PUT', body: JSON.stringify(body) })
+}
+
+export function resetUserPassword(id, body) {
+  return request(`/api/user/admin/${id}/password`, { method: 'PUT', body: JSON.stringify(body) })
+}

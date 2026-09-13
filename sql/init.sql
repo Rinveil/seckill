@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS t_user (
     password_hash VARCHAR(100) NOT NULL,
     role VARCHAR(16) NOT NULL,
     nickname VARCHAR(64) NOT NULL,
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '0=禁用 1=启用',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

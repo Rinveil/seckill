@@ -13,6 +13,7 @@ import Register from './views/Register.vue'
 import AdminLayout from './views/AdminLayout.vue'
 import ActivityManage from './views/ActivityManage.vue'
 import OrderManage from './views/OrderManage.vue'
+import UserManage from './views/UserManage.vue'
 import SeckillHome from './views/SeckillHome.vue'
 import Activity from './views/Activity.vue'
 import Result from './views/Result.vue'
@@ -29,6 +30,7 @@ const router = createRouter({
       children: [
         { path: 'ops/activities', component: ActivityManage, meta: { admin: true } },
         { path: 'ops/orders', component: OrderManage, meta: { admin: true } },
+        { path: 'ops/users', component: UserManage, meta: { admin: true } },
         { path: 'seckill', component: SeckillHome },
         { path: 'seckill/activity/:id', component: Activity },
         { path: 'seckill/result', component: Result }

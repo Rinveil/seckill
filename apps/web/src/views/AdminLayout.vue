@@ -9,6 +9,7 @@
         <el-menu-item-group v-if="admin" title="运营区">
           <el-menu-item index="/ops/activities">活动管理</el-menu-item>
           <el-menu-item index="/ops/orders">订单管理</el-menu-item>
+          <el-menu-item index="/ops/users">用户管理</el-menu-item>
         </el-menu-item-group>
         <el-menu-item-group title="自测抢购">
           <el-menu-item index="/seckill">活动会场</el-menu-item>
@@ -41,6 +42,7 @@ const user = computed(() => getUser())
 const admin = computed(() => isAdmin())
 const active = computed(() => {
   if (route.path.startsWith('/ops/orders')) return '/ops/orders'
+  if (route.path.startsWith('/ops/users')) return '/ops/users'
   if (route.path.startsWith('/ops/activities')) return '/ops/activities'
   if (route.path.startsWith('/seckill')) return '/seckill'
   return route.path
