@@ -58,6 +58,4 @@ setUnauthorizedHandler((message) => {
   })
 })
 
-export { homePathForRole }
-
 createApp(App).use(router).use(ElementPlus, { locale: zhCn }).mount('#app')
