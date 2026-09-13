@@ -40,6 +40,7 @@ public class UserAdminService {
         int s = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
 
         LambdaQueryWrapper<UserAccount> qw = new LambdaQueryWrapper<UserAccount>()
+                .orderByDesc(UserAccount::getCreatedAt)
                 .orderByDesc(UserAccount::getId);
         if (StringUtils.hasText(keyword)) {
             String kw = keyword.trim();
