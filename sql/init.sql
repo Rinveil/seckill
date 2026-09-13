@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS t_activity (
     price_fen INT NOT NULL,
     origin_price_fen INT NOT NULL,
     stock INT NOT NULL,
-    status TINYINT NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '0=DRAFT 1=OPEN 2=PREHEATED 3=CLOSED终态',
     start_at DATETIME NOT NULL,
     end_at DATETIME NOT NULL
 );

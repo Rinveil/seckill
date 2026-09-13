@@ -21,10 +21,10 @@
           {{ row.redisStock == null ? `DB ${row.stock}` : `Redis ${row.redisStock}` }}
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="90">
+      <el-table-column label="状态" width="110">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'OPEN' ? 'success' : 'info'" size="small" effect="plain">
-            {{ row.status === 'OPEN' ? '开' : '关' }}
+          <el-tag :type="statusType(row.status)" size="small" effect="plain">
+            {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -46,6 +46,20 @@ import { getActivities } from '../api'
 
 const loading = ref(false)
 const rows = ref([])
+
+function statusLabel(status) {
+  if (status === 'OPEN') return '开抢中'
+  if (status === 'PREHEATED') return '已预热'
+  if (status === 'CLOSED') return '已结束'
+  return '草稿'
+}
+
+function statusType(status) {
+  if (status === 'OPEN') return 'success'
+  if (status === 'PREHEATED') return 'warning'
+  if (status === 'CLOSED') return 'info'
+  return ''
+}
 
 onMounted(async () => {
   loading.value = true

@@ -4,7 +4,7 @@
       <div class="card-head">
         <div>
           <div class="title">活动管理</div>
-          <div class="hint">时间按本地时区显示 · DB 库存与 Redis 库存相互独立</div>
+          <div class="hint">DRAFT→预热→开抢→关闭(终态) · 关闭后须新建活动</div>
         </div>
         <el-button type="primary" @click="openCreate">新建活动</el-button>
       </div>
@@ -28,40 +28,41 @@
       <el-table-column label="结束" min-width="160">
         <template #default="{ row }">{{ formatLocal(row.endAt) }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="90">
+      <el-table-column label="状态" width="110">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'OPEN' ? 'success' : 'info'" size="small" effect="plain">
-            {{ row.status === 'OPEN' ? '开' : '关' }}
+          <el-tag :type="statusType(row.status)" size="small" effect="plain">
+            {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="操作" min-width="360" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button link type="primary" :disabled="row.status === 'CLOSED'" @click="openEdit(row)">编辑</el-button>
           <el-button
             link
             type="warning"
-            :disabled="row.status === 'OPEN'"
+            :disabled="row.status === 'OPEN' || row.status === 'CLOSED'"
             @click="onPreheat(row)"
           >预热</el-button>
           <el-button
             link
             type="warning"
-            :disabled="row.status === 'OPEN' || row.redisStock == null"
+            :disabled="row.status !== 'PREHEATED'"
             @click="openRedisStock(row)"
           >改Redis</el-button>
           <el-button
-            v-if="row.status !== 'OPEN'"
-            link
-            type="success"
-            @click="onOpen(row)"
-          >开抢</el-button>
-          <el-button
-            v-else
+            v-if="row.status === 'OPEN'"
             link
             type="info"
             @click="onClose(row)"
           >关闭</el-button>
+          <el-button
+            v-else
+            link
+            type="success"
+            :disabled="row.status !== 'PREHEATED'"
+            @click="onOpen(row)"
+          >开抢</el-button>
           <el-button link type="danger" :disabled="row.status === 'OPEN'" @click="onDelete(row)">
             删除
           </el-button>
@@ -79,6 +80,14 @@
       title="开抢中仅可改标题；价格、库存、时间已锁定"
       style="margin-bottom: 14px"
     />
+    <el-alert
+      v-else-if="editingClosed"
+      type="info"
+      :closable="false"
+      show-icon
+      title="活动已结束（终态），不可修改，请新建活动"
+      style="margin-bottom: 14px"
+    />
     <el-form :model="form" label-width="108px">
       <el-form-item label="标题" required>
         <el-input v-model="form.title" maxlength="128" />
@@ -91,7 +100,7 @@
       </el-form-item>
       <el-form-item label="配置库存" required>
         <el-input-number v-model="form.stock" :min="0" :disabled="editingOpen" />
-        <div class="field-tip">仅写入 DB；关闭后可通过「预热 / 改 Redis」同步现场库存</div>
+        <div class="field-tip">仅写入 DB；预热后写入 Redis；关闭为终态不可再预热</div>
       </el-form-item>
       <el-form-item label="开始时间" required>
         <el-date-picker
@@ -114,7 +123,7 @@
     </el-form>
     <template #footer>
       <el-button @click="formVisible = false">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
+      <el-button type="primary" :loading="saving" :disabled="editingClosed" @click="onSave">保存</el-button>
     </template>
   </el-dialog>
 
@@ -152,8 +161,23 @@ const formVisible = ref(false)
 const redisVisible = ref(false)
 const editingId = ref(null)
 const editingOpen = ref(false)
+const editingClosed = ref(false)
 const redisTargetId = ref(null)
 const redisStock = ref(0)
+
+function statusLabel(status) {
+  if (status === 'OPEN') return '开抢中'
+  if (status === 'PREHEATED') return '已预热'
+  if (status === 'CLOSED') return '已结束'
+  return '草稿'
+}
+
+function statusType(status) {
+  if (status === 'OPEN') return 'success'
+  if (status === 'PREHEATED') return 'warning'
+  if (status === 'CLOSED') return 'info'
+  return ''
+}
 
 const form = reactive({
   title: '',
@@ -226,13 +250,19 @@ function resetForm() {
 function openCreate() {
   editingId.value = null
   editingOpen.value = false
+  editingClosed.value = false
   resetForm()
   formVisible.value = true
 }
 
 function openEdit(row) {
+  if (row.status === 'CLOSED') {
+    ElMessage.warning('活动已结束（终态），请新建活动')
+    return
+  }
   editingId.value = row.id
   editingOpen.value = row.status === 'OPEN'
+  editingClosed.value = false
   form.title = row.title
   form.priceFen = row.priceFen
   form.originPriceFen = row.originPriceFen
@@ -286,6 +316,10 @@ async function onPreheat(row) {
     ElMessage.warning('开抢中禁止预热，避免覆盖现场库存')
     return
   }
+  if (row.status === 'CLOSED') {
+    ElMessage.warning('活动已结束（终态），请新建活动')
+    return
+  }
   const res = await preheatActivity(row.id)
   if (res.code !== 0) {
     ElMessage.error(res.message || '预热失败')
@@ -296,6 +330,10 @@ async function onPreheat(row) {
 }
 
 async function onOpen(row) {
+  if (row.status !== 'PREHEATED') {
+    ElMessage.warning('请先预热后再开抢')
+    return
+  }
   const res = await openActivity(row.id)
   if (res.code !== 0) {
     ElMessage.error(res.message || '开抢失败')
@@ -311,7 +349,7 @@ async function onClose(row) {
     ElMessage.error(res.message || '关闭失败')
     return
   }
-  ElMessage.success('已关闭')
+  ElMessage.success('已关闭（终态，不可再开）')
   upsertRow(res.data)
 }
 
@@ -327,8 +365,8 @@ async function onDelete(row) {
 }
 
 function openRedisStock(row) {
-  if (row.status === 'OPEN') {
-    ElMessage.warning('开抢中禁止修改 Redis 库存')
+  if (row.status !== 'PREHEATED') {
+    ElMessage.warning('仅已预热状态可改 Redis 库存')
     return
   }
   redisTargetId.value = row.id

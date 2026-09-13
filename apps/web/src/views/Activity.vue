@@ -3,7 +3,7 @@
     <div class="arena-hero">
       <h3>{{ item?.title || '秒杀会场' }}</h3>
       <div class="arena-meta">
-        <span>状态：{{ item?.status === 'OPEN' ? '开抢中' : '未开抢' }}</span>
+        <span>状态：{{ statusText }}</span>
         <span>
           库存 {{ item?.redisStock == null ? `DB ${item?.stock ?? '-'}` : `Redis ${item.redisStock}` }}
         </span>
@@ -40,8 +40,16 @@ let timer
 
 const started = computed(() => item.value && now.value >= Date.parse(item.value.startAt))
 const canGrab = computed(() => item.value?.status === 'OPEN' && started.value)
+const statusText = computed(() => {
+  if (!item.value) return '-'
+  if (item.value.status === 'OPEN') return '开抢中'
+  if (item.value.status === 'PREHEATED') return '已预热'
+  if (item.value.status === 'CLOSED') return '已结束'
+  return '未开抢'
+})
 const grabLabel = computed(() => {
   if (!item.value) return '加载中'
+  if (item.value.status === 'CLOSED') return '活动已结束'
   if (item.value.status !== 'OPEN') return '活动未开抢'
   if (!started.value) return '等待开始'
   return '立即抢购'

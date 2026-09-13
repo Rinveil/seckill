@@ -2,8 +2,8 @@
 
 以 [architecture.md](./architecture.md) 为准。
 
-要点：K8s 全容器（arm64 / NodePort / PVC）；共享 MySQL + **MyBatis-Plus**；JWT；限流与压测后置。  
-产品：注册仅 USER + 种子 ADMIN；活动开/关；直接改 Redis 库存；限购 1；Mock 支付成功；取消回滚库存；落单失败自动回滚。  
+要点：K8s 全容器（arm64 / NodePort / PVC）；共享 MySQL + **MyBatis-Plus**；JWT；单机 Docker 轻量并发（目标约 300 QPS、0 超卖）。  
+产品：注册仅 USER + 种子 ADMIN；活动状态机终态不复用；限购 1；Mock 支付；取消/超时回滚。  
 流程约定：每完成一步 → commit → **push 远程** →（Mac self-hosted runner）自动构建部署，见 [ci-cd.md](./ci-cd.md)。
 
 1. K8s 最小可部署空壳  
@@ -14,4 +14,7 @@
 6. `core`：Lua 预扣 + 失败自动回滚  
 7. `order`：MQ 建单 + Mock 支付 + 取消回滚  
 8. 订单支付超时（3 分钟）+ 活动 `end_at` 自动关抢  
-9. （后置）限流、对账、压测
+9. 活动状态机 DRAFT→PREHEATED→OPEN→CLOSED（终态，同活动不复用）  
+10. MQ 可靠性（DLQ + 扫表兜底）+ 库存对账  
+11. 轻量压测（跑前确认）  
+12. （后置）限流、真实支付态

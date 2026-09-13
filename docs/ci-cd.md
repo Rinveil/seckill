@@ -11,6 +11,9 @@ git push origin main
     → 本地镜像 + Docker Desktop K8s 滚动更新
 ```
 
+无 Runner 时本机手动：`./infra/scripts/ci-deploy.sh` 或按模块 `./infra/scripts/deploy-local.sh order web`。  
+入口：http://localhost:30080
+
 ## 一次性配置 Runner（本机）
 
 1. 打开仓库：**Settings → Actions → Runners → New self-hosted runner**  

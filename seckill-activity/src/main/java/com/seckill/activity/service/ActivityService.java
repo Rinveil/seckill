@@ -25,6 +25,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 活动状态机：DRAFT → PREHEATED → OPEN → CLOSED（终态，同活动不复用）。
+ */
 @Service
 public class ActivityService {
 
@@ -64,7 +67,7 @@ public class ActivityService {
         entity.setPriceFen(request.priceFen());
         entity.setOriginPriceFen(request.originPriceFen());
         entity.setStock(request.stock());
-        entity.setStatus(Activity.STATUS_CLOSED);
+        entity.setStatus(Activity.STATUS_DRAFT);
         entity.setStartAt(toLocal(request.startAt()));
         entity.setEndAt(toLocal(request.endAt()));
         activityMapper.insert(entity);
@@ -75,12 +78,17 @@ public class ActivityService {
         requireAdmin(role);
         validateTimeRange(request.startAt(), request.endAt());
         Activity entity = requireActivity(id);
-        if (isOpen(entity)) {
+        int status = statusOf(entity);
+        if (status == Activity.STATUS_CLOSED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "活动已结束（终态），不可修改，请新建活动");
+        }
+        if (status == Activity.STATUS_OPEN) {
             assertOpenImmutableFields(entity, request);
             entity.setTitle(request.title().trim());
             activityMapper.updateById(entity);
             return toView(entity);
         }
+        // DRAFT / PREHEATED：可改配置
         entity.setTitle(request.title().trim());
         entity.setPriceFen(request.priceFen());
         entity.setOriginPriceFen(request.originPriceFen());
@@ -95,7 +103,7 @@ public class ActivityService {
         requireAdmin(role);
         Activity entity = requireActivity(id);
         if (isOpen(entity)) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "请先关闭活动再删除");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "开抢中不可删除，请先关闭");
         }
         activityMapper.deleteById(id);
         stringRedisTemplate.delete(SeckillRedisKeys.stock(id));
@@ -105,9 +113,15 @@ public class ActivityService {
     public ActivityView open(String role, long id) {
         requireAdmin(role);
         Activity entity = requireActivity(id);
+        if (statusOf(entity) == Activity.STATUS_CLOSED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "活动已结束（终态），不可再次开抢，请新建活动");
+        }
+        if (statusOf(entity) != Activity.STATUS_PREHEATED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请先预热后再开抢");
+        }
         String key = SeckillRedisKeys.stock(id);
         if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "请先预热 Redis 库存再开抢");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "Redis 库存缺失，请重新预热");
         }
         LocalDateTime now = LocalDateTime.now(ZONE);
         if (entity.getEndAt() == null || !entity.getEndAt().isAfter(now)) {
@@ -122,10 +136,17 @@ public class ActivityService {
 
     public ActivityView close(String role, long id) {
         requireAdmin(role);
-        return doClose(requireActivity(id));
+        Activity entity = requireActivity(id);
+        if (statusOf(entity) == Activity.STATUS_CLOSED) {
+            return toView(entity);
+        }
+        if (!isOpen(entity)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "仅开抢中的活动可关闭；关闭后为终态，须新建活动再开抢");
+        }
+        return doClose(entity);
     }
 
-    /** 延迟队列到期：仍开抢则自动关闭。 */
+    /** 延迟队列到期：仍开抢则自动关闭为终态。 */
     public void expireIfOpen(long activityId) {
         Activity entity = activityMapper.selectById(activityId);
         if (entity == null || !isOpen(entity)) {
@@ -155,27 +176,40 @@ public class ActivityService {
         );
     }
 
-    /** 将 DB 配置库存写入 Redis（覆盖）。 */
+    /** DRAFT/PREHEATED → PREHEATED：将 DB 配置库存写入 Redis。 */
     public ActivityView preheat(String role, long id) {
         requireAdmin(role);
         Activity entity = requireActivity(id);
-        if (isOpen(entity)) {
+        int status = statusOf(entity);
+        if (status == Activity.STATUS_OPEN) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "开抢中禁止预热，避免覆盖现场库存");
         }
+        if (status == Activity.STATUS_CLOSED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "活动已结束（终态），不可预热，请新建活动");
+        }
         stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stock(id), String.valueOf(entity.getStock()));
+        entity.setStatus(Activity.STATUS_PREHEATED);
+        activityMapper.updateById(entity);
         return toView(entity);
     }
 
-    /** B 端直接改 Redis 库存；不强制同步 DB。 */
+    /** 仅 PREHEATED 可改 Redis 库存。 */
     public ActivityView updateRedisStock(String role, long id, int stock) {
         requireAdmin(role);
         Activity entity = requireActivity(id);
-        if (isOpen(entity)) {
+        int status = statusOf(entity);
+        if (status == Activity.STATUS_OPEN) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "开抢中禁止修改 Redis 库存");
+        }
+        if (status == Activity.STATUS_CLOSED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "活动已结束（终态），不可改库存");
+        }
+        if (status != Activity.STATUS_PREHEATED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请先预热后再改 Redis 库存");
         }
         String key = SeckillRedisKeys.stock(id);
         if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "尚未预热，请先预热再改 Redis 库存");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "Redis 库存缺失，请重新预热");
         }
         stringRedisTemplate.opsForValue().set(key, String.valueOf(stock));
         return toView(requireActivity(id));
@@ -201,11 +235,14 @@ public class ActivityService {
         }
     }
 
-    private static boolean isOpen(Activity entity) {
-        return entity.getStatus() != null && entity.getStatus() == Activity.STATUS_OPEN;
+    private static int statusOf(Activity entity) {
+        return entity.getStatus() == null ? Activity.STATUS_DRAFT : entity.getStatus();
     }
 
-    /** 开抢后仅允许改标题；价格/库存/时间不可变。 */
+    private static boolean isOpen(Activity entity) {
+        return statusOf(entity) == Activity.STATUS_OPEN;
+    }
+
     private void assertOpenImmutableFields(Activity entity, ActivityUpdateRequest request) {
         if (!Objects.equals(entity.getPriceFen(), request.priceFen())
                 || !Objects.equals(entity.getOriginPriceFen(), request.originPriceFen())
@@ -224,18 +261,26 @@ public class ActivityService {
     }
 
     private ActivityView toView(Activity entity) {
-        Integer redisStock = readRedisStock(entity.getId());
         return new ActivityView(
                 entity.getId(),
                 entity.getTitle(),
                 entity.getPriceFen(),
                 entity.getOriginPriceFen(),
                 entity.getStock(),
-                redisStock,
-                entity.getStatus() != null && entity.getStatus() == Activity.STATUS_OPEN ? "OPEN" : "CLOSED",
+                readRedisStock(entity.getId()),
+                statusName(statusOf(entity)),
                 toInstant(entity.getStartAt()),
                 toInstant(entity.getEndAt())
         );
+    }
+
+    private static String statusName(int status) {
+        return switch (status) {
+            case Activity.STATUS_OPEN -> "OPEN";
+            case Activity.STATUS_PREHEATED -> "PREHEATED";
+            case Activity.STATUS_CLOSED -> "CLOSED";
+            default -> "DRAFT";
+        };
     }
 
     private Integer readRedisStock(long activityId) {
