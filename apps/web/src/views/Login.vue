@@ -40,7 +40,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { login, setAuth } from '../api'
+import { login, homePathForRole, setAuth } from '../api'
 
 const router = useRouter()
 const route = useRoute()
@@ -51,6 +51,14 @@ const form = reactive({ username: '', password: '' })
 const rules = {
   username: [{ required: true, message: '用户名不能为空', trigger: 'blur' }],
   password: [{ required: true, message: '密码不能为空', trigger: 'blur' }]
+}
+
+function safeRedirect(role) {
+  const fallback = homePathForRole(role)
+  const raw = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  if (!raw || raw.startsWith('/login')) return fallback
+  if (raw.startsWith('/ops') && role !== 'ADMIN') return fallback
+  return raw
 }
 
 async function onSubmit() {
@@ -69,7 +77,7 @@ async function onSubmit() {
     }
     setAuth(res.data)
     ElMessage.success('欢迎回来')
-    router.replace(route.query.redirect || '/ops/activities')
+    router.replace(safeRedirect(res.data.role))
   } finally {
     loading.value = false
   }

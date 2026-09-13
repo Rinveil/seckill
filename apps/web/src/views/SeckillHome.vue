@@ -4,11 +4,12 @@
       <div class="card-head">
         <div>
           <div class="title">活动会场</div>
-          <div class="hint">石头商城 · 自测抢购</div>
+          <div class="hint">仅展示已预热 / 开抢中 / 已结束 · 草稿请在运营区处理</div>
         </div>
+        <el-button :loading="loading" @click="load">刷新</el-button>
       </div>
     </template>
-    <el-empty v-if="!rows.length" description="暂无活动，请先在运营区创建并开抢" />
+    <el-empty v-if="!rows.length" description="暂无可参与活动，请管理员预热并开抢" />
     <el-table v-else :data="rows" stripe>
       <el-table-column prop="title" label="活动" min-width="180" />
       <el-table-column label="秒杀价" width="110">
@@ -28,11 +29,20 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="120">
+      <el-table-column label="操作" width="140">
         <template #default="{ row }">
-          <el-button type="primary" link @click="$router.push(`/seckill/activity/${row.id}`)">
-            进入会场
-          </el-button>
+          <el-tooltip :content="enterTip(row)" :disabled="row.status === 'OPEN'">
+            <span class="act">
+              <el-button
+                type="primary"
+                link
+                :disabled="row.status !== 'OPEN' && row.status !== 'PREHEATED' && row.status !== 'CLOSED'"
+                @click="$router.push(`/seckill/activity/${row.id}`)"
+              >
+                {{ row.status === 'OPEN' ? '进入会场' : '查看' }}
+              </el-button>
+            </span>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
@@ -61,7 +71,14 @@ function statusType(status) {
   return ''
 }
 
-onMounted(async () => {
+function enterTip(row) {
+  if (row.status === 'OPEN') return ''
+  if (row.status === 'PREHEATED') return '尚未开抢，可查看详情'
+  if (row.status === 'CLOSED') return '活动已结束'
+  return ''
+}
+
+async function load() {
   loading.value = true
   try {
     const res = await getActivities()
@@ -69,9 +86,17 @@ onMounted(async () => {
       ElMessage.error(res.message || '加载失败')
       return
     }
-    rows.value = res.data || []
+    rows.value = (res.data || []).filter((a) => a.status !== 'DRAFT')
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(load)
 </script>
+
+<style scoped>
+.act {
+  display: inline-block;
+}
+</style>

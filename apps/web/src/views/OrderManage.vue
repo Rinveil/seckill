@@ -4,7 +4,7 @@
       <div class="card-head">
         <div>
           <div class="title">订单管理</div>
-          <div class="hint">Mock 支付固定成功 · 待支付 3 分钟超时自动关单并回滚库存</div>
+          <div class="hint">Mock 支付固定成功 · 待支付 3 分钟超时自动关单并回滚库存 · 时间上海时区</div>
         </div>
         <el-button :loading="loading" @click="load">刷新</el-button>
       </div>
@@ -24,20 +24,28 @@
       <el-table-column label="支付截止" min-width="170">
         <template #default="{ row }">{{ formatTime(row.expireAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button
-            link
-            type="success"
-            :disabled="!canPayOrCancel(row)"
-            @click="onPay(row)"
-          >Mock支付</el-button>
-          <el-button
-            link
-            type="danger"
-            :disabled="!canPayOrCancel(row)"
-            @click="onCancel(row)"
-          >取消</el-button>
+          <el-tooltip :content="actionTip(row)" :disabled="canPayOrCancel(row)">
+            <span class="act">
+              <el-button
+                link
+                type="success"
+                :disabled="!canPayOrCancel(row)"
+                @click="onPay(row)"
+              >Mock支付</el-button>
+            </span>
+          </el-tooltip>
+          <el-tooltip :content="actionTip(row)" :disabled="canPayOrCancel(row)">
+            <span class="act">
+              <el-button
+                link
+                type="danger"
+                :disabled="!canPayOrCancel(row)"
+                @click="onCancel(row)"
+              >取消</el-button>
+            </span>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
@@ -79,6 +87,16 @@ function canPayOrCancel(row) {
   return new Date(row.expireAt).getTime() > Date.now()
 }
 
+function actionTip(row) {
+  if (row.status === 'PAID') return '订单已支付'
+  if (row.status === 'CANCELLED') return '订单已取消'
+  if (row.status === 'EXPIRED') return '订单已超时'
+  if (row.status === 'CREATED' && row.expireAt && new Date(row.expireAt).getTime() <= Date.now()) {
+    return '已过支付截止时间（以服务器关单为准）'
+  }
+  return '仅待支付且未超时可操作'
+}
+
 async function load() {
   loading.value = true
   try {
@@ -94,6 +112,10 @@ async function load() {
 }
 
 async function onPay(row) {
+  if (!canPayOrCancel(row)) {
+    ElMessage.warning(actionTip(row))
+    return
+  }
   const res = await payOrder(row.orderNo)
   if (res.code !== 0) {
     ElMessage.error(res.message || '支付失败')
@@ -105,6 +127,10 @@ async function onPay(row) {
 }
 
 async function onCancel(row) {
+  if (!canPayOrCancel(row)) {
+    ElMessage.warning(actionTip(row))
+    return
+  }
   await ElMessageBox.confirm(`确认取消订单 ${row.orderNo}？将回滚 Redis 库存`, '取消确认', {
     type: 'warning'
   })
@@ -120,3 +146,9 @@ async function onCancel(row) {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.act {
+  display: inline-block;
+}
+</style>

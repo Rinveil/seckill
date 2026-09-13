@@ -4,7 +4,7 @@
       <div class="card-head">
         <div>
           <div class="title">活动管理</div>
-          <div class="hint">DRAFT→预热→开抢→关闭(终态) · 关闭后须新建活动</div>
+          <div class="hint">DRAFT→预热→开抢→关闭(终态) · 关闭后须新建活动 · 时间按上海时区</div>
         </div>
         <el-button type="primary" @click="openCreate">新建活动</el-button>
       </div>
@@ -35,42 +35,57 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="420" fixed="right">
+      <el-table-column label="操作" min-width="460" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" :disabled="row.status === 'CLOSED'" @click="openEdit(row)">编辑</el-button>
-          <el-button
-            link
-            type="warning"
-            :disabled="row.status === 'OPEN' || row.status === 'CLOSED'"
-            @click="onPreheat(row)"
-          >预热</el-button>
-          <el-button
-            link
-            type="warning"
-            :disabled="row.status !== 'PREHEATED'"
-            @click="openRedisStock(row)"
-          >改Redis</el-button>
+          <el-tooltip :content="tipEdit(row)" :disabled="!tipEdit(row)">
+            <span class="act">
+              <el-button link type="primary" :disabled="row.status === 'CLOSED'" @click="openEdit(row)">编辑</el-button>
+            </span>
+          </el-tooltip>
+          <el-tooltip :content="tipPreheat(row)" :disabled="!tipPreheat(row)">
+            <span class="act">
+              <el-button
+                link
+                type="warning"
+                :disabled="row.status === 'OPEN' || row.status === 'CLOSED'"
+                @click="onPreheat(row)"
+              >预热</el-button>
+            </span>
+          </el-tooltip>
+          <el-tooltip :content="tipRedis(row)" :disabled="!tipRedis(row)">
+            <span class="act">
+              <el-button
+                link
+                type="warning"
+                :disabled="row.status !== 'PREHEATED'"
+                @click="openRedisStock(row)"
+              >改Redis</el-button>
+            </span>
+          </el-tooltip>
           <el-button
             v-if="row.status === 'OPEN'"
             link
             type="info"
             @click="onClose(row)"
           >关闭</el-button>
-          <el-button
-            v-else
-            link
-            type="success"
-            :disabled="row.status !== 'PREHEATED'"
-            @click="onOpen(row)"
-          >开抢</el-button>
-          <el-button
-            link
-            type="primary"
-            @click="onReconcile(row)"
-          >对账</el-button>
-          <el-button link type="danger" :disabled="row.status === 'OPEN'" @click="onDelete(row)">
-            删除
-          </el-button>
+          <el-tooltip v-else :content="tipOpen(row)" :disabled="!tipOpen(row)">
+            <span class="act">
+              <el-button
+                link
+                type="success"
+                :disabled="row.status !== 'PREHEATED'"
+                @click="onOpen(row)"
+              >开抢</el-button>
+            </span>
+          </el-tooltip>
+          <el-button link type="primary" @click="onReconcile(row)">对账</el-button>
+          <el-tooltip :content="tipDelete(row)" :disabled="!tipDelete(row)">
+            <span class="act">
+              <el-button link type="danger" :disabled="row.status === 'OPEN'" @click="onDelete(row)">
+                删除
+              </el-button>
+            </span>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
@@ -85,42 +100,46 @@
       title="开抢中仅可改标题；价格、库存、时间已锁定"
       style="margin-bottom: 14px"
     />
-    <el-alert
-      v-else-if="editingClosed"
-      type="info"
-      :closable="false"
-      show-icon
-      title="活动已结束（终态），不可修改，请新建活动"
-      style="margin-bottom: 14px"
-    />
-    <el-form :model="form" label-width="108px">
-      <el-form-item label="标题" required>
-        <el-input v-model="form.title" maxlength="128" />
+    <el-form ref="formRef" :model="form" :rules="formRules" label-width="108px">
+      <el-form-item label="标题" prop="title">
+        <el-input v-model="form.title" maxlength="128" show-word-limit />
       </el-form-item>
-      <el-form-item label="秒杀价(分)" required>
-        <el-input-number v-model="form.priceFen" :min="1" :step="100" :disabled="editingOpen" />
+      <el-form-item label="秒杀价(元)" prop="priceYuan">
+        <el-input-number
+          v-model="form.priceYuan"
+          :min="0.01"
+          :step="1"
+          :precision="2"
+          :disabled="editingOpen"
+        />
       </el-form-item>
-      <el-form-item label="原价(分)" required>
-        <el-input-number v-model="form.originPriceFen" :min="1" :step="100" :disabled="editingOpen" />
+      <el-form-item label="原价(元)" prop="originYuan">
+        <el-input-number
+          v-model="form.originYuan"
+          :min="0.01"
+          :step="1"
+          :precision="2"
+          :disabled="editingOpen"
+        />
       </el-form-item>
-      <el-form-item label="配置库存" required>
+      <el-form-item label="配置库存" prop="stock">
         <el-input-number v-model="form.stock" :min="0" :disabled="editingOpen" />
         <div class="field-tip">仅写入 DB；预热后写入 Redis；关闭为终态不可再预热</div>
       </el-form-item>
-      <el-form-item label="开始时间" required>
+      <el-form-item label="开始时间" prop="startAt">
         <el-date-picker
           v-model="form.startAt"
           type="datetime"
-          placeholder="本地时间"
+          placeholder="上海时区墙钟时间"
           style="width: 100%"
           :disabled="editingOpen"
         />
       </el-form-item>
-      <el-form-item label="结束时间" required>
+      <el-form-item label="结束时间" prop="endAt">
         <el-date-picker
           v-model="form.endAt"
           type="datetime"
-          placeholder="本地时间"
+          placeholder="须晚于开始时间"
           style="width: 100%"
           :disabled="editingOpen"
         />
@@ -128,7 +147,7 @@
     </el-form>
     <template #footer>
       <el-button @click="formVisible = false">取消</el-button>
-      <el-button type="primary" :loading="saving" :disabled="editingClosed" @click="onSave">保存</el-button>
+      <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
     </template>
   </el-dialog>
 
@@ -167,7 +186,7 @@ const formVisible = ref(false)
 const redisVisible = ref(false)
 const editingId = ref(null)
 const editingOpen = ref(false)
-const editingClosed = ref(false)
+const formRef = ref()
 const redisTargetId = ref(null)
 const redisStock = ref(0)
 
@@ -185,14 +204,50 @@ function statusType(status) {
   return ''
 }
 
+function tipEdit(row) {
+  return row.status === 'CLOSED' ? '已结束（终态），请新建活动' : ''
+}
+function tipPreheat(row) {
+  if (row.status === 'OPEN') return '开抢中禁止预热'
+  if (row.status === 'CLOSED') return '已结束（终态），请新建活动'
+  return ''
+}
+function tipRedis(row) {
+  if (row.status === 'PREHEATED') return ''
+  if (row.status === 'OPEN') return '开抢中禁止改 Redis'
+  if (row.status === 'CLOSED') return '已结束（终态）'
+  return '请先预热'
+}
+function tipOpen(row) {
+  if (row.status === 'PREHEATED') return ''
+  if (row.status === 'CLOSED') return '已结束（终态），请新建活动'
+  if (row.status === 'OPEN') return ''
+  return '请先预热后再开抢'
+}
+function tipDelete(row) {
+  return row.status === 'OPEN' ? '开抢中不可删除，请先关闭' : ''
+}
+
 const form = reactive({
   title: '',
-  priceFen: 9900,
-  originPriceFen: 39900,
+  priceYuan: 99,
+  originYuan: 399,
   stock: 100,
   startAt: null,
   endAt: null
 })
+
+const formRules = {
+  title: [
+    { required: true, message: '活动标题不能为空', trigger: 'blur' },
+    { min: 1, max: 128, message: '标题最长 128 字', trigger: 'blur' }
+  ],
+  priceYuan: [{ required: true, message: '请输入秒杀价', trigger: 'change' }],
+  originYuan: [{ required: true, message: '请输入原价', trigger: 'change' }],
+  stock: [{ required: true, message: '请输入配置库存', trigger: 'change' }],
+  startAt: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
+  endAt: [{ required: true, message: '请选择结束时间', trigger: 'change' }]
+}
 
 const timeFormatter = computed(() => new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai',
@@ -217,6 +272,10 @@ function toIso(value) {
   const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return null
   return d.toISOString()
+}
+
+function yuanToFen(yuan) {
+  return Math.round(Number(yuan) * 100)
 }
 
 function upsertRow(item) {
@@ -246,8 +305,8 @@ async function load() {
 function resetForm() {
   const now = Date.now()
   form.title = ''
-  form.priceFen = 9900
-  form.originPriceFen = 39900
+  form.priceYuan = 99
+  form.originYuan = 399
   form.stock = 100
   form.startAt = new Date(now + 60_000)
   form.endAt = new Date(now + 3600_000)
@@ -256,7 +315,6 @@ function resetForm() {
 function openCreate() {
   editingId.value = null
   editingOpen.value = false
-  editingClosed.value = false
   resetForm()
   formVisible.value = true
 }
@@ -268,10 +326,9 @@ function openEdit(row) {
   }
   editingId.value = row.id
   editingOpen.value = row.status === 'OPEN'
-  editingClosed.value = false
   form.title = row.title
-  form.priceFen = row.priceFen
-  form.originPriceFen = row.originPriceFen
+  form.priceYuan = Number(((row.priceFen || 0) / 100).toFixed(2))
+  form.originYuan = Number(((row.originPriceFen || 0) / 100).toFixed(2))
   form.stock = row.stock
   form.startAt = row.startAt ? new Date(row.startAt) : null
   form.endAt = row.endAt ? new Date(row.endAt) : null
@@ -281,8 +338,8 @@ function openEdit(row) {
 function toPayload() {
   return {
     title: form.title.trim(),
-    priceFen: form.priceFen,
-    originPriceFen: form.originPriceFen,
+    priceFen: yuanToFen(form.priceYuan),
+    originPriceFen: yuanToFen(form.originYuan),
     stock: form.stock,
     startAt: toIso(form.startAt),
     endAt: toIso(form.endAt)
@@ -290,9 +347,11 @@ function toPayload() {
 }
 
 async function onSave() {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
   const payload = toPayload()
-  if (!payload.title || !payload.startAt || !payload.endAt) {
-    ElMessage.warning('请填写完整（含有效的开始/结束时间）')
+  if (payload.priceFen > payload.originPriceFen) {
+    ElMessage.warning('秒杀价不能高于原价')
     return
   }
   if (new Date(payload.endAt) <= new Date(payload.startAt)) {
@@ -425,5 +484,8 @@ onMounted(load)
   color: var(--muted, #6a767e);
   font-size: 12px;
   line-height: 1.4;
+}
+.act {
+  display: inline-block;
 }
 </style>

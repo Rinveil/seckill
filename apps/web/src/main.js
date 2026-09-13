@@ -1,10 +1,11 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import ElementPlus from 'element-plus'
+import { ElMessage } from 'element-plus'
 import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import App from './App.vue'
-import { isLoggedIn } from './api'
+import { isAdmin, isLoggedIn, setUnauthorizedHandler } from './api'
 import './style.css'
 
 import Login from './views/Login.vue'
@@ -24,10 +25,10 @@ const router = createRouter({
     {
       path: '/',
       component: AdminLayout,
-      redirect: '/ops/activities',
+      redirect: () => (isAdmin() ? '/ops/activities' : '/seckill'),
       children: [
-        { path: 'ops/activities', component: ActivityManage },
-        { path: 'ops/orders', component: OrderManage },
+        { path: 'ops/activities', component: ActivityManage, meta: { admin: true } },
+        { path: 'ops/orders', component: OrderManage, meta: { admin: true } },
         { path: 'seckill', component: SeckillHome },
         { path: 'seckill/activity/:id', component: Activity },
         { path: 'seckill/result', component: Result }
@@ -38,8 +39,25 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta.public) return true
-  if (!isLoggedIn()) return { path: '/login', query: { redirect: to.fullPath } }
+  if (!isLoggedIn()) {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.admin && !isAdmin()) {
+    ElMessage.warning('需要管理员权限')
+    return { path: '/seckill' }
+  }
   return true
 })
+
+setUnauthorizedHandler((message) => {
+  ElMessage.warning(message || '登录已过期，请重新登录')
+  const redirect = router.currentRoute.value.fullPath
+  router.replace({
+    path: '/login',
+    query: redirect.startsWith('/login') ? {} : { redirect }
+  })
+})
+
+export { homePathForRole }
 
 createApp(App).use(router).use(ElementPlus, { locale: zhCn }).mount('#app')

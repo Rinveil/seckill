@@ -6,7 +6,7 @@
         <div class="brand-sub">STONE MALL</div>
       </div>
       <el-menu :default-active="active" router>
-        <el-menu-item-group title="运营区">
+        <el-menu-item-group v-if="admin" title="运营区">
           <el-menu-item index="/ops/activities">活动管理</el-menu-item>
           <el-menu-item index="/ops/orders">订单管理</el-menu-item>
         </el-menu-item-group>
@@ -33,11 +33,12 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { clearAuth, getUser } from '../api'
+import { clearAuth, getUser, isAdmin } from '../api'
 
 const route = useRoute()
 const router = useRouter()
 const user = computed(() => getUser())
+const admin = computed(() => isAdmin())
 const active = computed(() => {
   if (route.path.startsWith('/ops/orders')) return '/ops/orders'
   if (route.path.startsWith('/ops/activities')) return '/ops/activities'

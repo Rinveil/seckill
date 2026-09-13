@@ -1,6 +1,13 @@
 const TOKEN_KEY = 'seckill_token'
 const USER_KEY = 'seckill_user'
 
+let unauthorizedHandler = null
+let unauthorizedNotified = false
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler
+}
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || ''
 }
@@ -16,6 +23,7 @@ export function getUser() {
 }
 
 export function setAuth(payload) {
+  unauthorizedNotified = false
   if (payload?.token) {
     localStorage.setItem(TOKEN_KEY, payload.token)
   }
@@ -36,6 +44,15 @@ export function isLoggedIn() {
   return Boolean(getToken())
 }
 
+export function isAdmin() {
+  return getUser()?.role === 'ADMIN'
+}
+
+/** 登录后默认落地页 */
+export function homePathForRole(role) {
+  return role === 'ADMIN' ? '/ops/activities' : '/seckill'
+}
+
 async function request(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
@@ -45,10 +62,23 @@ async function request(path, options = {}) {
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
-  const res = await fetch(path, { ...options, headers })
-  const data = await res.json().catch(() => ({ code: res.status, message: '请求失败', data: null }))
+  let res
+  try {
+    res = await fetch(path, { ...options, headers })
+  } catch {
+    return { code: -1, message: '网络异常，请稍后重试', data: null }
+  }
+  const data = await res.json().catch(() => ({
+    code: res.status || -1,
+    message: '请求失败',
+    data: null
+  }))
   if (res.status === 401 || data.code === 401) {
     clearAuth()
+    if (!unauthorizedNotified) {
+      unauthorizedNotified = true
+      unauthorizedHandler?.(data.message || '登录已过期，请重新登录')
+    }
   }
   return data
 }

@@ -67,6 +67,7 @@ public class ActivityService {
     public ActivityView create(String role, ActivityCreateRequest request) {
         requireAdmin(role);
         validateTimeRange(request.startAt(), request.endAt());
+        validatePrices(request.priceFen(), request.originPriceFen());
         Activity entity = new Activity();
         entity.setTitle(request.title().trim());
         entity.setPriceFen(request.priceFen());
@@ -82,6 +83,7 @@ public class ActivityService {
     public ActivityView update(String role, long id, ActivityUpdateRequest request) {
         requireAdmin(role);
         validateTimeRange(request.startAt(), request.endAt());
+        validatePrices(request.priceFen(), request.originPriceFen());
         Activity entity = requireActivity(id);
         int status = statusOf(entity);
         if (status == Activity.STATUS_CLOSED) {
@@ -319,6 +321,12 @@ public class ActivityService {
     private void validateTimeRange(Instant startAt, Instant endAt) {
         if (!endAt.isAfter(startAt)) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "结束时间须晚于开始时间");
+        }
+    }
+
+    private void validatePrices(int priceFen, int originPriceFen) {
+        if (priceFen > originPriceFen) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "秒杀价不能高于原价");
         }
     }
 
