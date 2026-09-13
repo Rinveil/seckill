@@ -4,6 +4,7 @@ IntelliJ 多模块工程：唯一 B 端（Vue3 + Element Plus）+ 网关 + 用�
 **运行：Mac Docker Desktop K8s（全部容器）**；共享一个 MySQL；登录鉴权用 **JWT**。
 
 目标架构见 [docs/architecture.md](docs/architecture.md)；落地顺序见 [docs/roadmap.md](docs/roadmap.md)；  
+测试报告见 [docs/test-report.md](docs/test-report.md)；  
 K8s 空壳部署见 [infra/k8s/README.md](infra/k8s/README.md)；  
 **本机部署**：`./infra/scripts/deploy-local.sh` / `ci-deploy.sh`，见 [docs/ci-cd.md](docs/ci-cd.md)。
 
