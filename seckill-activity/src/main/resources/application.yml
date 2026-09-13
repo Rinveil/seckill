@@ -26,6 +26,7 @@ spring:
 seckill:
   activity:
     expire-scan-ms: ${ACTIVITY_EXPIRE_SCAN_MS:30000}
+    reconcile-scan-ms: ${ACTIVITY_RECONCILE_SCAN_MS:60000}
 
 mybatis-plus:
   configuration:
