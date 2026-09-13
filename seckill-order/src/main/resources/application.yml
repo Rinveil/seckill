@@ -23,6 +23,10 @@ spring:
         acknowledge-mode: auto
         default-requeue-rejected: false
 
+seckill:
+  order:
+    expire-minutes: ${ORDER_EXPIRE_MINUTES:3}
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true

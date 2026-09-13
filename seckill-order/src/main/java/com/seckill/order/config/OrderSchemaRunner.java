@@ -31,10 +31,22 @@ public class OrderSchemaRunner implements ApplicationRunner {
                             activity_id BIGINT NOT NULL,
                             amount_fen INT NOT NULL,
                             status VARCHAR(32) NOT NULL,
-                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            expire_at DATETIME NULL
                         )
                         """
         );
+        Integer hasExpire = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*) FROM information_schema.columns
+                        WHERE table_schema = DATABASE() AND table_name = 't_order' AND column_name = 'expire_at'
+                        """,
+                Integer.class
+        );
+        if (hasExpire != null && hasExpire == 0) {
+            log.warn("adding expire_at column to existing t_order");
+            jdbcTemplate.execute("ALTER TABLE t_order ADD COLUMN expire_at DATETIME NULL");
+        }
         log.info("t_order schema ready");
     }
 }

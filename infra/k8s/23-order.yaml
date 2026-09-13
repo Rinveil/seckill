@@ -53,6 +53,8 @@ spec:
                 secretKeyRef:
                   name: seckill-secrets
                   key: RABBITMQ_DEFAULT_PASS
+            - name: ORDER_EXPIRE_MINUTES
+              value: "3"
           resources:
             requests:
               memory: 256Mi

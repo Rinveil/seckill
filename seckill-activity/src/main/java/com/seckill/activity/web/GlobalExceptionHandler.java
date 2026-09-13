@@ -3,6 +3,7 @@ package com.seckill.activity.web;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.result.Result;
 import com.seckill.common.result.ResultCode;
+import com.seckill.common.web.ValidationMessages;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -19,7 +20,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class, HttpMessageNotReadableException.class})
     public Result<Void> handleValidation(Exception e) {
-        return Result.fail(ResultCode.BAD_REQUEST.code(), ResultCode.BAD_REQUEST.message());
+        return Result.fail(ResultCode.BAD_REQUEST.code(), ValidationMessages.of(e));
     }
 
     @ExceptionHandler(Exception.class)

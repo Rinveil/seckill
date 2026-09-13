@@ -1,21 +1,26 @@
 <template>
-  <el-card>
-    <h3>{{ item?.title || '秒杀会场' }}</h3>
-    <p class="muted">
-      状态：{{ item?.status === 'OPEN' ? '开' : '关' }}
-      · 库存 {{ item?.redisStock == null ? `DB ${item?.stock ?? '-'}` : `Redis ${item.redisStock}` }}
-    </p>
-    <p class="muted">{{ countdown }}</p>
-    <el-button
-      type="danger"
-      :disabled="!canGrab || loading"
-      :loading="loading"
-      @click="onGrab"
-    >
-      {{ grabLabel }}
-    </el-button>
-    <div style="margin-top: 12px">
-      <el-button link type="primary" @click="$router.push('/seckill')">返回列表</el-button>
+  <el-card class="page-panel" shadow="never">
+    <div class="arena-hero">
+      <h3>{{ item?.title || '秒杀会场' }}</h3>
+      <div class="arena-meta">
+        <span>状态：{{ item?.status === 'OPEN' ? '开抢中' : '未开抢' }}</span>
+        <span>
+          库存 {{ item?.redisStock == null ? `DB ${item?.stock ?? '-'}` : `Redis ${item.redisStock}` }}
+        </span>
+        <span>{{ countdown }}</span>
+      </div>
+      <el-button
+        class="grab-btn"
+        type="primary"
+        :disabled="!canGrab || loading"
+        :loading="loading"
+        @click="onGrab"
+      >
+        {{ grabLabel }}
+      </el-button>
+      <div style="margin-top: 16px">
+        <el-button link type="primary" @click="$router.push('/seckill')">返回会场列表</el-button>
+      </div>
     </div>
   </el-card>
 </template>

@@ -1,6 +1,13 @@
 <template>
-  <el-card v-loading="loading">
-    <template #header>自测抢购 · 活动列表</template>
+  <el-card class="page-panel" shadow="never" v-loading="loading">
+    <template #header>
+      <div class="card-head">
+        <div>
+          <div class="title">活动会场</div>
+          <div class="hint">石头商城 · 自测抢购</div>
+        </div>
+      </div>
+    </template>
     <el-empty v-if="!rows.length" description="暂无活动，请先在运营区创建并开抢" />
     <el-table v-else :data="rows" stripe>
       <el-table-column prop="title" label="活动" min-width="180" />
@@ -16,14 +23,14 @@
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'OPEN' ? 'success' : 'info'" size="small">
+          <el-tag :type="row.status === 'OPEN' ? 'success' : 'info'" size="small" effect="plain">
             {{ row.status === 'OPEN' ? '开' : '关' }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="120">
         <template #default="{ row }">
-          <el-button type="danger" link @click="$router.push(`/seckill/activity/${row.id}`)">
+          <el-button type="primary" link @click="$router.push(`/seckill/activity/${row.id}`)">
             进入会场
           </el-button>
         </template>

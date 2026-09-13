@@ -15,6 +15,7 @@ public class SeckillOrder {
     public static final String STATUS_CREATED = "CREATED";
     public static final String STATUS_PAID = "PAID";
     public static final String STATUS_CANCELLED = "CANCELLED";
+    public static final String STATUS_EXPIRED = "EXPIRED";
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -29,4 +30,6 @@ public class SeckillOrder {
     private String status;
     @TableField("created_at")
     private LocalDateTime createdAt;
+    @TableField("expire_at")
+    private LocalDateTime expireAt;
 }

@@ -8,6 +8,7 @@ public record OrderView(
         long activityId,
         String status,
         int amountFen,
-        Instant createdAt
+        Instant createdAt,
+        Instant expireAt
 ) {
 }

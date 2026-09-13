@@ -1,9 +1,7 @@
 package com.seckill.core.controller;
 
-import com.seckill.common.exception.BusinessException;
 import com.seckill.common.result.Result;
 import com.seckill.core.service.SeckillService;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -28,10 +26,5 @@ public class SeckillController {
             @RequestHeader("X-User-Id") long userId
     ) {
         return Result.ok(seckillService.grab(activityId, userId));
-    }
-
-    @ExceptionHandler(BusinessException.class)
-    public Result<Void> onBiz(BusinessException ex) {
-        return Result.fail(ex.getCode(), ex.getMessage());
     }
 }

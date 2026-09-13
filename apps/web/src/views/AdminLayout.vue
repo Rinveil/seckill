@@ -1,7 +1,10 @@
 <template>
   <el-container class="admin-shell">
-    <el-aside width="220px" class="admin-aside">
-      <div class="brand">秒杀 B 端</div>
+    <el-aside class="admin-aside">
+      <div class="brand">
+        <div class="brand-name">石头商城</div>
+        <div class="brand-sub">STONE MALL</div>
+      </div>
       <el-menu :default-active="active" router>
         <el-menu-item-group title="运营区">
           <el-menu-item index="/ops/activities">活动管理</el-menu-item>
@@ -12,12 +15,15 @@
         </el-menu-item-group>
       </el-menu>
     </el-aside>
-    <el-container>
+    <el-container class="admin-main-wrap">
       <el-header class="admin-header">
-        <span>{{ user?.nickname || user?.username }}（{{ user?.role }}）</span>
+        <span class="user-chip">
+          <strong>{{ user?.nickname || user?.username }}</strong>
+          · {{ user?.role }}
+        </span>
         <el-button link type="primary" @click="onLogout">退出</el-button>
       </el-header>
-      <el-main>
+      <el-main class="admin-main">
         <router-view />
       </el-main>
     </el-container>
