@@ -1,7 +1,6 @@
 package com.seckill.user.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.result.ResultCode;
 import com.seckill.user.domain.UserAccount;
@@ -53,9 +52,11 @@ public class UserAdminService {
             qw.eq(UserAccount::getStatus, toStatusCode(status.trim().toUpperCase()));
         }
 
-        Page<UserAccount> result = userMapper.selectPage(new Page<>(p, s), qw);
-        List<UserView> list = result.getRecords().stream().map(this::toView).toList();
-        return new UserPageView(list, result.getTotal(), p, s);
+        long total = userMapper.selectCount(qw);
+        long offset = (long) (p - 1) * s;
+        qw.last("LIMIT " + s + " OFFSET " + offset);
+        List<UserView> list = userMapper.selectList(qw).stream().map(this::toView).toList();
+        return new UserPageView(list, total, p, s);
     }
 
     public UserView detail(String roleHeader, long id) {

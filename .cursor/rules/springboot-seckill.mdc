@@ -11,6 +11,6 @@ alwaysApply: true
 4. 使用 Redis 做库存预扣、RabbitMQ 异步削峰时，要考虑消息丢失、重复消费。
 5. SQL 禁止大 offset 分页，禁止循环数据库查询；优先使用连接池。
 6. 输出代码之后，主动提示潜在并发风险点。
-7. 压测命令须向我确认。部署走 **GitHub push → Mac self-hosted runner → 本机构建并 kubectl 部署**（见 `docs/ci-cd.md`）；无 Runner 时再在本机手动跑 `infra/scripts/ci-deploy.sh` 或 `deploy-local.sh`。
+7. 压测命令须向我确认。**每完成一步：git commit → push → 本机执行部署**（优先 `./infra/scripts/deploy-local.sh <改动模块>`，全量用 `ci-deploy.sh`）；Agent **须主动跑部署**，不要只 push 等 Runner。也可并行依赖 GitHub self-hosted runner（见 `docs/ci-cd.md`）。
 8. 不要修改 `application` 密钥配置，密钥读取使用环境变量。
 9. 给出设计时，先输出简要架构思路，再写代码，不要直接扔一堆文件。

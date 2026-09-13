@@ -1,17 +1,14 @@
 # 推送 GitHub → 本机自动编译部署
 
-Docker Desktop 里的 Kubernetes **不会**直接监听 GitHub。  
-本方案用 **GitHub Actions + Mac self-hosted runner**：`push` 到 `main` 后，在你这台 Mac 上执行 `docker build` + `kubectl apply/rollout`。
+日常改完后：**Agent / 本机直接跑** `./infra/scripts/deploy-local.sh <模块>`（或全量 `ci-deploy.sh`），再 push。  
+也可额外依赖 **GitHub Actions + Mac self-hosted runner**：`push` 到 `main` 后再部署一遍。
 
 ```text
-git push origin main
-    → GitHub Actions 触发
-    → Mac self-hosted runner 领取任务
-    → ./infra/scripts/ci-deploy.sh
-    → 本地镜像 + Docker Desktop K8s 滚动更新
+改代码 → commit → deploy-local.sh（本机镜像+kubectl）
+         → push origin main（可选触发 Runner 再部署）
 ```
 
-无 Runner 时本机手动：`./infra/scripts/ci-deploy.sh` 或按模块 `./infra/scripts/deploy-local.sh order web`。  
+无 Runner 时本机手动：`./infra/scripts/ci-deploy.sh` 或按模块 `./infra/scripts/deploy-local.sh user web`。  
 入口：http://localhost:30080
 
 ## 一次性配置 Runner（本机）
