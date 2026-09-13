@@ -73,7 +73,7 @@ public class OrderService {
             log.error("activity missing, rollback stock. activityId={} token={}",
                     message.activityId(), message.orderToken());
             StockRollbackHelper.rollback(stringRedisTemplate, message.activityId(), message.userId());
-            return;
+            throw new IllegalStateException("activity missing for order token=" + message.orderToken());
         }
 
         LocalDateTime createdAt = message.createdAt() == null
@@ -164,6 +164,26 @@ public class OrderService {
         expireIfCreated(message.orderNo());
     }
 
+    /** 扫表兜底：关闭已过 expire_at 的 CREATED 订单。 */
+    public int expireOverdueBatch(int limit) {
+        int batch = Math.max(1, Math.min(limit, 200));
+        LocalDateTime now = LocalDateTime.now(ZONE);
+        List<SeckillOrder> overdue = orderMapper.selectList(
+                new LambdaQueryWrapper<SeckillOrder>()
+                        .eq(SeckillOrder::getStatus, SeckillOrder.STATUS_CREATED)
+                        .isNotNull(SeckillOrder::getExpireAt)
+                        .lt(SeckillOrder::getExpireAt, now)
+                        .orderByAsc(SeckillOrder::getExpireAt)
+                        .last("LIMIT " + batch)
+        );
+        int closed = 0;
+        for (SeckillOrder order : overdue) {
+            expireIfCreated(order.getOrderNo());
+            closed++;
+        }
+        return closed;
+    }
+
     private void expireIfCreated(String orderNo) {
         SeckillOrder order = findByOrderNo(orderNo);
         if (order == null) {
@@ -189,15 +209,19 @@ public class OrderService {
 
     private void scheduleExpire(String orderNo, int expireMinutes) {
         long ttlMs = TimeUnit.MINUTES.toMillis(expireMinutes);
-        rabbitTemplate.convertAndSend(
-                OrderMqConstants.EXCHANGE,
-                OrderMqConstants.ROUTING_KEY_DELAY,
-                new OrderExpireMessage(orderNo),
-                msg -> {
-                    msg.getMessageProperties().setExpiration(String.valueOf(ttlMs));
-                    return msg;
-                }
-        );
+        try {
+            rabbitTemplate.convertAndSend(
+                    OrderMqConstants.EXCHANGE,
+                    OrderMqConstants.ROUTING_KEY_DELAY,
+                    new OrderExpireMessage(orderNo),
+                    msg -> {
+                        msg.getMessageProperties().setExpiration(String.valueOf(ttlMs));
+                        return msg;
+                    }
+            );
+        } catch (RuntimeException ex) {
+            log.warn("schedule order expire failed, scan job will cover. orderNo={}", orderNo, ex);
+        }
     }
 
     private boolean isPastExpire(SeckillOrder order) {

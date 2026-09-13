@@ -5,6 +5,7 @@ import com.seckill.activity.domain.Activity;
 import com.seckill.activity.dto.ActivityCreateRequest;
 import com.seckill.activity.dto.ActivityUpdateRequest;
 import com.seckill.activity.dto.ActivityView;
+import com.seckill.activity.dto.StockReconcileView;
 import com.seckill.activity.mapper.ActivityMapper;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.mq.ActivityExpireMessage;
@@ -15,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -38,15 +40,18 @@ public class ActivityService {
     private final ActivityMapper activityMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final RabbitTemplate rabbitTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
     public ActivityService(
             ActivityMapper activityMapper,
             StringRedisTemplate stringRedisTemplate,
-            RabbitTemplate rabbitTemplate
+            RabbitTemplate rabbitTemplate,
+            JdbcTemplate jdbcTemplate
     ) {
         this.activityMapper = activityMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.rabbitTemplate = rabbitTemplate;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     public List<ActivityView> list() {
@@ -108,6 +113,7 @@ public class ActivityService {
         activityMapper.deleteById(id);
         stringRedisTemplate.delete(SeckillRedisKeys.stock(id));
         stringRedisTemplate.delete(SeckillRedisKeys.open(id));
+        stringRedisTemplate.delete(SeckillRedisKeys.stockInit(id));
     }
 
     public ActivityView open(String role, long id) {
@@ -156,6 +162,79 @@ public class ActivityService {
         log.info("activity auto-closed by expire: id={}", activityId);
     }
 
+    /** 扫表兜底：关闭已过 end_at 仍 OPEN 的活动。 */
+    public int closeOverdueBatch(int limit) {
+        int batch = Math.max(1, Math.min(limit, 100));
+        LocalDateTime now = LocalDateTime.now(ZONE);
+        List<Activity> overdue = activityMapper.selectList(
+                new LambdaQueryWrapper<Activity>()
+                        .eq(Activity::getStatus, Activity.STATUS_OPEN)
+                        .isNotNull(Activity::getEndAt)
+                        .lt(Activity::getEndAt, now)
+                        .orderByAsc(Activity::getEndAt)
+                        .last("LIMIT " + batch)
+        );
+        int closed = 0;
+        for (Activity entity : overdue) {
+            doClose(entity);
+            closed++;
+            log.info("activity closed by scan: id={}", entity.getId());
+        }
+        return closed;
+    }
+
+    /** 库存对账：init ≈ redis + CREATED + PAID。 */
+    public StockReconcileView reconcile(String role, long id) {
+        requireAdmin(role);
+        Activity entity = requireActivity(id);
+        Integer redisStock = readRedisStock(id);
+        Integer initStock = readInt(SeckillRedisKeys.stockInit(id));
+        long created = countOrders(id, "CREATED");
+        long paid = countOrders(id, "PAID");
+        long cancelled = countOrders(id, "CANCELLED");
+        long expired = countOrders(id, "EXPIRED");
+        long occupied = created + paid;
+        Integer expectedRedis = initStock == null ? null : initStock - (int) occupied;
+        boolean consistent;
+        String message;
+        if (initStock == null || redisStock == null) {
+            consistent = false;
+            message = "缺少 init 或 redis 库存（请先预热；旧活动需重新预热才会写入 init）";
+        } else if (expectedRedis != null && expectedRedis.equals(redisStock)) {
+            consistent = true;
+            message = "一致：init = redis + CREATED + PAID";
+        } else {
+            consistent = false;
+            message = "不一致：期望 redis=" + expectedRedis + " 实际=" + redisStock
+                    + "（可能超卖/漏回滚，或预热后又改过基准）";
+        }
+        return new StockReconcileView(
+                id,
+                statusName(statusOf(entity)),
+                entity.getStock() == null ? 0 : entity.getStock(),
+                redisStock,
+                initStock,
+                created,
+                paid,
+                cancelled,
+                expired,
+                occupied,
+                expectedRedis,
+                consistent,
+                message
+        );
+    }
+
+    private long countOrders(long activityId, String status) {
+        Long n = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_order WHERE activity_id = ? AND status = ?",
+                Long.class,
+                activityId,
+                status
+        );
+        return n == null ? 0L : n;
+    }
+
     private ActivityView doClose(Activity entity) {
         entity.setStatus(Activity.STATUS_CLOSED);
         activityMapper.updateById(entity);
@@ -165,15 +244,19 @@ public class ActivityService {
 
     private void scheduleExpire(long activityId, long delayMs) {
         long ttl = Math.max(delayMs, 1000L);
-        rabbitTemplate.convertAndSend(
-                ActivityMqConstants.EXCHANGE,
-                ActivityMqConstants.ROUTING_KEY_DELAY,
-                new ActivityExpireMessage(activityId),
-                msg -> {
-                    msg.getMessageProperties().setExpiration(String.valueOf(ttl));
-                    return msg;
-                }
-        );
+        try {
+            rabbitTemplate.convertAndSend(
+                    ActivityMqConstants.EXCHANGE,
+                    ActivityMqConstants.ROUTING_KEY_DELAY,
+                    new ActivityExpireMessage(activityId),
+                    msg -> {
+                        msg.getMessageProperties().setExpiration(String.valueOf(ttl));
+                        return msg;
+                    }
+            );
+        } catch (RuntimeException ex) {
+            log.warn("schedule activity expire failed, scan job will cover. id={}", activityId, ex);
+        }
     }
 
     /** DRAFT/PREHEATED → PREHEATED：将 DB 配置库存写入 Redis。 */
@@ -187,7 +270,9 @@ public class ActivityService {
         if (status == Activity.STATUS_CLOSED) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "活动已结束（终态），不可预热，请新建活动");
         }
-        stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stock(id), String.valueOf(entity.getStock()));
+        String stockVal = String.valueOf(entity.getStock());
+        stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stock(id), stockVal);
+        stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stockInit(id), stockVal);
         entity.setStatus(Activity.STATUS_PREHEATED);
         activityMapper.updateById(entity);
         return toView(entity);
@@ -211,7 +296,9 @@ public class ActivityService {
         if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "Redis 库存缺失，请重新预热");
         }
-        stringRedisTemplate.opsForValue().set(key, String.valueOf(stock));
+        String stockVal = String.valueOf(stock);
+        stringRedisTemplate.opsForValue().set(key, stockVal);
+        stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stockInit(id), stockVal);
         return toView(requireActivity(id));
     }
 
@@ -284,7 +371,11 @@ public class ActivityService {
     }
 
     private Integer readRedisStock(long activityId) {
-        String raw = stringRedisTemplate.opsForValue().get(SeckillRedisKeys.stock(activityId));
+        return readInt(SeckillRedisKeys.stock(activityId));
+    }
+
+    private Integer readInt(String key) {
+        String raw = stringRedisTemplate.opsForValue().get(key);
         if (raw == null || raw.isBlank()) {
             return null;
         }

@@ -65,6 +65,30 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue orderCreateDlq() {
+        return new Queue(OrderMqConstants.QUEUE_CREATE_DLQ, true);
+    }
+
+    @Bean
+    public Binding orderCreateDlqBinding(Queue orderCreateDlq, DirectExchange orderExchange) {
+        return BindingBuilder.bind(orderCreateDlq)
+                .to(orderExchange)
+                .with(OrderMqConstants.ROUTING_KEY_CREATE_DLQ);
+    }
+
+    @Bean
+    public Queue orderExpireDlq() {
+        return new Queue(OrderMqConstants.QUEUE_EXPIRE_DLQ, true);
+    }
+
+    @Bean
+    public Binding orderExpireDlqBinding(Queue orderExpireDlq, DirectExchange orderExchange) {
+        return BindingBuilder.bind(orderExpireDlq)
+                .to(orderExchange)
+                .with(OrderMqConstants.ROUTING_KEY_EXPIRE_DLQ);
+    }
+
+    @Bean
     public MessageConverter jacksonMessageConverter() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());

@@ -4,6 +4,7 @@ import com.seckill.activity.dto.ActivityCreateRequest;
 import com.seckill.activity.dto.ActivityUpdateRequest;
 import com.seckill.activity.dto.ActivityView;
 import com.seckill.activity.dto.RedisStockRequest;
+import com.seckill.activity.dto.StockReconcileView;
 import com.seckill.activity.service.ActivityService;
 import com.seckill.common.result.Result;
 import jakarta.validation.Valid;
@@ -96,5 +97,13 @@ public class ActivityController {
             @Valid @RequestBody RedisStockRequest request
     ) {
         return Result.ok(activityService.updateRedisStock(role, id, request.stock()));
+    }
+
+    @GetMapping("/{id}/reconcile")
+    public Result<StockReconcileView> reconcile(
+            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @PathVariable long id
+    ) {
+        return Result.ok(activityService.reconcile(role, id));
     }
 }

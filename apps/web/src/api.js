@@ -101,6 +101,10 @@ export function updateRedisStock(id, body) {
   return request(`/api/activity/${id}/redis-stock`, { method: 'PUT', body: JSON.stringify(body) })
 }
 
+export function reconcileActivity(id) {
+  return request(`/api/activity/${id}/reconcile`)
+}
+
 export function grab(activityId) {
   return request(`/api/seckill/${activityId}`, { method: 'POST' })
 }

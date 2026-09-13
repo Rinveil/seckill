@@ -50,6 +50,18 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue activityExpireDlq() {
+        return new Queue(ActivityMqConstants.QUEUE_EXPIRE_DLQ, true);
+    }
+
+    @Bean
+    public Binding activityExpireDlqBinding(Queue activityExpireDlq, DirectExchange activityExchange) {
+        return BindingBuilder.bind(activityExpireDlq)
+                .to(activityExchange)
+                .with(ActivityMqConstants.ROUTING_KEY_EXPIRE_DLQ);
+    }
+
+    @Bean
     public MessageConverter jacksonMessageConverter() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());

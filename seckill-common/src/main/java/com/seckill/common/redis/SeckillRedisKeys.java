@@ -19,4 +19,9 @@ public final class SeckillRedisKeys {
     public static String bought(long activityId, long userId) {
         return "seckill:bought:" + activityId + ":" + userId;
     }
+
+    /** 预热/改 Redis 时的基准库存，供对账：init ≈ redis + CREATED + PAID。 */
+    public static String stockInit(long activityId) {
+        return "seckill:stock:init:" + activityId;
+    }
 }

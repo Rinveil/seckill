@@ -65,9 +65,9 @@
 | `apps/web` | 登录注册、活动开关/库存、预热、自测抢购、订单、Mock 支付、取消 |
 | `seckill-gateway` | 路由、CORS、JWT 校验与用户透传 |
 | `seckill-user` | 注册(USER)、登录、种子 ADMIN、`/me`、签发 JWT |
-| `seckill-activity` | 活动 CRUD、开/关；`end_at` 到期自动关抢；共享 MySQL |
-| `seckill-core` | Redis Lua 预扣（限 1）；发 MQ；失败自动回滚库存 |
-| `seckill-order` | MQ 幂等建单；Mock 支付；3 分钟超时关单；取消 + 回滚库存 |
+| `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账 |
+| `seckill-core` | Redis Lua 预扣（限 1）；发 MQ（Confirm）；失败自动回滚库存 |
+| `seckill-order` | MQ 幂等建单；Mock 支付；超时关单（延迟+扫表）；取消回滚；失败进 DLQ |
 | `infra` | K8s（NodePort、PVC、arm64 镜像） |
 
 ## 4. 鉴权（JWT）
@@ -104,7 +104,9 @@
 - Mock 支付固定成功，无真实资金流  
 - 取消 / 超时关单 / 「预扣失败回滚」都要改 Redis，需与预扣 Lua **同一套原子语义**，防止超卖或库存漂
 - 支付与超时关单竞态：以 DB 条件更新（仅 `CREATED`）为准，保证幂等
-- 活动手动关抢与到期关抢竞态：到期时若已非 OPEN 则跳过
+- 活动手动关抢与到期关抢竞态：到期时若已非 OPEN 则跳过；扫表与延迟消息双保险
+- 建单/过期消费失败进 DLQ（人工队列），业务侧已回滚的不重试，避免重复回滚
+- 对账依赖预热写入的 `seckill:stock:init:{id}`；旧活动需重新预热才有 init
 
 ## 7. 落地顺序
 
@@ -117,7 +119,7 @@
 7. `order`：MQ 建单 + **Mock 支付成功** + **取消并回滚库存**  
 8. 订单支付超时（3 分钟）+ 活动 `end_at` 自动关抢  
 9. 活动状态机 DRAFT→PREHEATED→OPEN→CLOSED（终态不复用）  
-10. MQ 可靠性增强（DLQ + 扫表兜底）+ 库存对账  
+10. MQ DLQ + 扫表兜底 + 库存对账  
 11. 轻量压测（~300 QPS / 0 超卖，跑前确认）  
 12. （后置）限流、真实支付态  
 

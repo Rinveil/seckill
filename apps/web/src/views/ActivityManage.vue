@@ -35,7 +35,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="360" fixed="right">
+      <el-table-column label="操作" min-width="420" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" :disabled="row.status === 'CLOSED'" @click="openEdit(row)">编辑</el-button>
           <el-button
@@ -63,6 +63,11 @@
             :disabled="row.status !== 'PREHEATED'"
             @click="onOpen(row)"
           >开抢</el-button>
+          <el-button
+            link
+            type="primary"
+            @click="onReconcile(row)"
+          >对账</el-button>
           <el-button link type="danger" :disabled="row.status === 'OPEN'" @click="onDelete(row)">
             删除
           </el-button>
@@ -150,6 +155,7 @@ import {
   getActivities,
   openActivity,
   preheatActivity,
+  reconcileActivity,
   updateActivity,
   updateRedisStock
 } from '../api'
@@ -362,6 +368,26 @@ async function onDelete(row) {
   }
   ElMessage.success('已删除')
   rows.value = rows.value.filter((r) => r.id !== row.id)
+}
+
+async function onReconcile(row) {
+  const res = await reconcileActivity(row.id)
+  if (res.code !== 0) {
+    ElMessage.error(res.message || '对账失败')
+    return
+  }
+  const d = res.data
+  const text = [
+    `活动 #${d.activityId} [${d.status}]`,
+    `DB配置=${d.dbStock} Redis=${d.redisStock ?? '-'} init=${d.initStock ?? '-'}`,
+    `订单 CREATED=${d.createdCount} PAID=${d.paidCount} CANCELLED=${d.cancelledCount} EXPIRED=${d.expiredCount}`,
+    `占用(CREATED+PAID)=${d.occupied} 期望Redis=${d.expectedRedis ?? '-'}`,
+    d.message
+  ].join('\n')
+  await ElMessageBox.alert(text, d.consistent ? '对账一致' : '对账不一致', {
+    type: d.consistent ? 'success' : 'warning',
+    confirmButtonText: '知道了'
+  })
 }
 
 function openRedisStock(row) {
