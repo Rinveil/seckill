@@ -1,39 +1,35 @@
 # 推送 GitHub → 本机自动编译部署
 
-日常改完后：**Agent / 本机直接跑** `./infra/scripts/deploy-local.sh <模块>`（或全量 `ci-deploy.sh`），再 push。  
-也可额外依赖 **GitHub Actions + Mac self-hosted runner**：`push` 到 `main` 后再部署一遍。
+self-hosted runner 已配置后，日常流程：
 
 ```text
-改代码 → commit → deploy-local.sh（本机镜像+kubectl）
-         → push origin main（可选触发 Runner 再部署）
+改代码 → commit → push origin main
+         → GitHub Actions 触发
+         → Mac runner 执行 ./infra/scripts/ci-deploy.sh
+         → 本机 docker build + kubectl 滚动更新
 ```
 
-无 Runner 时本机手动：`./infra/scripts/ci-deploy.sh` 或按模块 `./infra/scripts/deploy-local.sh user web`。  
+**Agent / 开发者不需要再手动跑部署**（除非 Runner 离线或用户明确要求）。  
 入口：http://localhost:30080
 
-## 一次性配置 Runner（本机）
+工作流：`.github/workflows/deploy-local-k8s.yml`  
+也可在 Actions 页手动 **Run workflow**。
 
-1. 打开仓库：**Settings → Actions → Runners → New self-hosted runner**  
-   地址示例：`https://github.com/Rinveil/seckill/settings/actions/runners/new`
-2. 选择 **macOS**，按页面命令下载并配置，**labels 务必包含**：
-   - `self-hosted`
-   - `macOS`
-   - `ARM64`
-3. 安装并启动服务（页面会给出 `./svc.sh install` / `./svc.sh start`）
-4. 确认 Docker Desktop **已启动**且 **Kubernetes 为 running**
-5. Runner 在线后，任意 push 到 `main` 即可自动部署
+无 Runner 时兜底：`./infra/scripts/ci-deploy.sh` 或 `./infra/scripts/deploy-local.sh user web`。
+
+## Runner 维护
+
+- 状态：`~/actions-runner` 下 `./svc.sh status`；GitHub → Settings → Actions → Runners 应为 Idle
+- Docker Desktop **已启动**且 **Kubernetes 为 running**
+- labels：`self-hosted`、`macOS`、`ARM64`（与 workflow `runs-on` 一致）
 
 ### 校验
 
 ```bash
-# Runner 在 GitHub 页面显示 Idle/Online
-# 本地：
 kubectl get nodes
 docker info >/dev/null && echo docker_ok
+# GitHub Actions 页看最近一次 Deploy to local Docker Desktop K8s
 ```
-
-工作流文件：`.github/workflows/deploy-local-k8s.yml`  
-也可在 Actions 页手动 **Run workflow**。
 
 ## 注意
 
