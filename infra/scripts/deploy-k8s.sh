@@ -24,7 +24,8 @@ kubectl -n seckill rollout restart \
 echo "==> waiting for deployments..."
 kubectl -n seckill rollout status deploy/mysql --timeout=180s || true
 kubectl -n seckill rollout status deploy/redis --timeout=120s || true
-kubectl -n seckill rollout status deploy/rabbitmq --timeout=180s || true
+kubectl -n seckill rollout status deploy/rocketmq-namesrv --timeout=180s || true
+kubectl -n seckill rollout status deploy/rocketmq-broker --timeout=240s || true
 kubectl -n seckill rollout status deploy/seckill-user --timeout=240s
 kubectl -n seckill rollout status deploy/seckill-activity --timeout=240s
 kubectl -n seckill rollout status deploy/seckill-core --timeout=240s

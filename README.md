@@ -5,8 +5,7 @@ IntelliJ 多模块工程：唯一 B 端（Vue3 + Element Plus）+ 网关 + 用�
 
 目标架构见 [docs/architecture.md](docs/architecture.md)；落地顺序见 [docs/roadmap.md](docs/roadmap.md)；  
 K8s 空壳部署见 [infra/k8s/README.md](infra/k8s/README.md)；  
-**本机一键部署**（无 Runner 时）：`./infra/scripts/ci-deploy.sh` 或 `./infra/scripts/deploy-local.sh`；  
-**Push 自动部署**见 [docs/ci-cd.md](docs/ci-cd.md)（GitHub Actions + Mac self-hosted runner）。
+**本机部署**：`./infra/scripts/deploy-local.sh` / `ci-deploy.sh`，见 [docs/ci-cd.md](docs/ci-cd.md)。
 
 ## 模块
 

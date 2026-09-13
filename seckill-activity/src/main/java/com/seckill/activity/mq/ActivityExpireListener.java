@@ -3,26 +3,31 @@ package com.seckill.activity.mq;
 import com.seckill.activity.service.ActivityService;
 import com.seckill.common.mq.ActivityExpireMessage;
 import com.seckill.common.mq.ActivityMqConstants;
+import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
+import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
+/**
+ * 活动到期关抢：失败不重试，依赖扫表兜底。
+ */
 @Component
-public class ActivityExpireListener {
+@RocketMQMessageListener(
+        topic = ActivityMqConstants.TOPIC_EXPIRE,
+        consumerGroup = ActivityMqConstants.CG_EXPIRE
+)
+public class ActivityExpireListener implements RocketMQListener<ActivityExpireMessage> {
 
     private static final Logger log = LoggerFactory.getLogger(ActivityExpireListener.class);
 
     private final ActivityService activityService;
-    private final RabbitTemplate rabbitTemplate;
 
-    public ActivityExpireListener(ActivityService activityService, RabbitTemplate rabbitTemplate) {
+    public ActivityExpireListener(ActivityService activityService) {
         this.activityService = activityService;
-        this.rabbitTemplate = rabbitTemplate;
     }
 
-    @RabbitListener(queues = ActivityMqConstants.QUEUE_EXPIRE)
+    @Override
     public void onMessage(ActivityExpireMessage message) {
         log.info("recv activity.expire activityId={}", message == null ? null : message.activityId());
         try {
@@ -30,20 +35,8 @@ public class ActivityExpireListener {
                 activityService.expireIfOpen(message.activityId());
             }
         } catch (RuntimeException ex) {
-            log.error("activity.expire failed, send DLQ. activityId={}",
+            log.error("activity.expire failed (scan job will cover). activityId={}",
                     message == null ? null : message.activityId(), ex);
-            if (message != null) {
-                rabbitTemplate.convertAndSend(
-                        ActivityMqConstants.EXCHANGE,
-                        ActivityMqConstants.ROUTING_KEY_EXPIRE_DLQ,
-                        message
-                );
-            }
         }
-    }
-
-    @RabbitListener(queues = ActivityMqConstants.QUEUE_EXPIRE_DLQ)
-    public void onDlq(ActivityExpireMessage message) {
-        log.error("DLQ activity.expire activityId={}", message == null ? null : message.activityId());
     }
 }

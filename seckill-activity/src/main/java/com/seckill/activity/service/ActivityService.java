@@ -12,11 +12,14 @@ import com.seckill.common.mq.ActivityExpireMessage;
 import com.seckill.common.mq.ActivityMqConstants;
 import com.seckill.common.redis.SeckillRedisKeys;
 import com.seckill.common.result.ResultCode;
+import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -39,18 +42,18 @@ public class ActivityService {
 
     private final ActivityMapper activityMapper;
     private final StringRedisTemplate stringRedisTemplate;
-    private final RabbitTemplate rabbitTemplate;
+    private final RocketMQTemplate rocketMQTemplate;
     private final JdbcTemplate jdbcTemplate;
 
     public ActivityService(
             ActivityMapper activityMapper,
             StringRedisTemplate stringRedisTemplate,
-            RabbitTemplate rabbitTemplate,
+            RocketMQTemplate rocketMQTemplate,
             JdbcTemplate jdbcTemplate
     ) {
         this.activityMapper = activityMapper;
         this.stringRedisTemplate = stringRedisTemplate;
-        this.rabbitTemplate = rabbitTemplate;
+        this.rocketMQTemplate = rocketMQTemplate;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -247,15 +250,14 @@ public class ActivityService {
     private void scheduleExpire(long activityId, long delayMs) {
         long ttl = Math.max(delayMs, 1000L);
         try {
-            rabbitTemplate.convertAndSend(
-                    ActivityMqConstants.EXCHANGE,
-                    ActivityMqConstants.ROUTING_KEY_DELAY,
-                    new ActivityExpireMessage(activityId),
-                    msg -> {
-                        msg.getMessageProperties().setExpiration(String.valueOf(ttl));
-                        return msg;
-                    }
+            SendResult result = rocketMQTemplate.syncSendDelayTimeMills(
+                    ActivityMqConstants.TOPIC_EXPIRE,
+                    MessageBuilder.withPayload(new ActivityExpireMessage(activityId)).build(),
+                    ttl
             );
+            if (result == null || result.getSendStatus() != SendStatus.SEND_OK) {
+                throw new IllegalStateException("rocketmq delay send failed: " + result);
+            }
         } catch (RuntimeException ex) {
             log.warn("schedule activity expire failed, scan job will cover. id={}", activityId, ex);
         }

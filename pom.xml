@@ -31,6 +31,7 @@
         <java.version>17</java.version>
         <spring-cloud.version>2023.0.3</spring-cloud.version>
         <mybatis-plus.version>3.5.9</mybatis-plus.version>
+        <rocketmq-spring.version>2.3.1</rocketmq-spring.version>
     </properties>
 
     <dependencyManagement>
@@ -46,6 +47,11 @@
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-spring-boot-starter</artifactId>
+                <version>${rocketmq-spring.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.seckill</groupId>

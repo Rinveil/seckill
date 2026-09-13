@@ -13,15 +13,12 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:redis}
       port: ${SPRING_DATA_REDIS_PORT:6379}
-  rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
-    port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:seckill}
-    password: ${SPRING_RABBITMQ_PASSWORD:seckill}
-    listener:
-      simple:
-        acknowledge-mode: auto
-        default-requeue-rejected: false
+
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:rocketmq-namesrv:9876}
+  producer:
+    group: seckill-activity-producer
+    send-message-timeout: 5000
 
 seckill:
   activity:

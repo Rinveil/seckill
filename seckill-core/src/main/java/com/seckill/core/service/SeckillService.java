@@ -1,14 +1,15 @@
 package com.seckill.core.service;
 
 import com.seckill.common.exception.BusinessException;
-import com.seckill.common.result.ResultCode;
 import com.seckill.common.mq.OrderCreateMessage;
 import com.seckill.common.mq.OrderMqConstants;
+import com.seckill.common.result.ResultCode;
 import com.seckill.core.redis.StockLuaExecutor;
+import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -21,11 +22,11 @@ public class SeckillService {
     private static final Logger log = LoggerFactory.getLogger(SeckillService.class);
 
     private final StockLuaExecutor stockLuaExecutor;
-    private final RabbitTemplate rabbitTemplate;
+    private final RocketMQTemplate rocketMQTemplate;
 
-    public SeckillService(StockLuaExecutor stockLuaExecutor, RabbitTemplate rabbitTemplate) {
+    public SeckillService(StockLuaExecutor stockLuaExecutor, RocketMQTemplate rocketMQTemplate) {
         this.stockLuaExecutor = stockLuaExecutor;
-        this.rabbitTemplate = rabbitTemplate;
+        this.rocketMQTemplate = rocketMQTemplate;
     }
 
     public Map<String, Object> grab(long activityId, long userId) {
@@ -59,18 +60,9 @@ public class SeckillService {
     }
 
     private void publishOrThrow(OrderCreateMessage message) {
-        CorrelationData correlation = new CorrelationData(message.orderToken());
-        Boolean confirmed = rabbitTemplate.invoke(operations -> {
-            operations.convertAndSend(
-                    OrderMqConstants.EXCHANGE,
-                    OrderMqConstants.ROUTING_KEY_CREATE,
-                    message,
-                    correlation
-            );
-            return operations.waitForConfirms(5_000);
-        });
-        if (!Boolean.TRUE.equals(confirmed)) {
-            throw new IllegalStateException("rabbit confirm timeout or nack");
+        SendResult result = rocketMQTemplate.syncSend(OrderMqConstants.TOPIC_CREATE, message);
+        if (result == null || result.getSendStatus() != SendStatus.SEND_OK) {
+            throw new IllegalStateException("rocketmq send failed: " + result);
         }
     }
 }
