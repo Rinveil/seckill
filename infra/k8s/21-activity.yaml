@@ -23,7 +23,7 @@ spec:
             - containerPort: 8082
           env:
             - name: JAVA_OPTS
-              value: "-Xms128m -Xmx256m"
+              value: "-Xms64m -Xmx192m"
             - name: SERVER_PORT
               value: "8082"
             - name: MYSQL_URL
@@ -43,10 +43,10 @@ spec:
               value: rocketmq-namesrv:9876
           resources:
             requests:
-              memory: 256Mi
+              memory: 128Mi
               cpu: 100m
             limits:
-              memory: 512Mi
+              memory: 384Mi
               cpu: "1"
           readinessProbe:
             httpGet:

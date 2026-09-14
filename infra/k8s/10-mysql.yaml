@@ -48,12 +48,16 @@ spec:
           args:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci
+            - --innodb-buffer-pool-size=134217728
+            - --performance-schema=OFF
+            - --table-open-cache=200
+            - --max-connections=50
           resources:
             requests:
-              memory: 256Mi
+              memory: 192Mi
               cpu: 100m
             limits:
-              memory: 512Mi
+              memory: 384Mi
               cpu: "1"
           volumeMounts:
             - name: data
