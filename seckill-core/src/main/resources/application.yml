@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: seckill-core
+  autoconfigure:
+    # MQ 关闭时排除；开启 MQ 时设 SECKILL_MQ_AUTOCONFIG_EXCLUDE=（空）并 SECKILL_MQ_ENABLED=true
+    exclude: ${SECKILL_MQ_AUTOCONFIG_EXCLUDE:org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration}
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:redis}

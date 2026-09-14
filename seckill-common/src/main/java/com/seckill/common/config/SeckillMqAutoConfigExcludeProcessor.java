@@ -2,8 +2,10 @@ package com.seckill.common.config;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,17 +15,17 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * MQ 关闭时排除 RocketMQ 自动配置，避免 NameServer 停用后应用起不来。
+ * MQ 关闭时排除 RocketMQ 自动配置，避免 NameServer 停用后应用仍创建 Producer。
+ * 在 ConfigData 之后执行（LOWEST_PRECEDENCE），以便读到 application.yml / 环境变量。
  */
-public class SeckillMqAutoConfigExcludeProcessor implements EnvironmentPostProcessor {
+public class SeckillMqAutoConfigExcludeProcessor implements EnvironmentPostProcessor, Ordered {
 
     private static final String ROCKET_MQ_AUTO =
             "org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration";
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
-        boolean mqEnabled = resolveMqEnabled(environment);
-        if (mqEnabled) {
+        if (resolveMqEnabled(environment)) {
             return;
         }
         Set<String> excludes = new LinkedHashSet<>();
@@ -35,10 +37,9 @@ public class SeckillMqAutoConfigExcludeProcessor implements EnvironmentPostProce
                     .forEach(excludes::add);
         }
         excludes.add(ROCKET_MQ_AUTO);
-        List<String> list = new ArrayList<>(excludes);
         environment.getPropertySources().addFirst(new MapPropertySource(
                 "seckillMqOffExclude",
-                Map.of("spring.autoconfigure.exclude", String.join(",", list))
+                Map.of("spring.autoconfigure.exclude", String.join(",", new ArrayList<>(excludes)))
         ));
     }
 
@@ -47,10 +48,24 @@ public class SeckillMqAutoConfigExcludeProcessor implements EnvironmentPostProce
         if (bound != null) {
             return bound;
         }
+        // 直接读系统环境（未经过 relaxed binding 时）
+        for (org.springframework.core.env.PropertySource<?> ps : environment.getPropertySources()) {
+            if (ps instanceof SystemEnvironmentPropertySource sys) {
+                Object v = sys.getProperty("SECKILL_MQ_ENABLED");
+                if (v != null) {
+                    return Boolean.parseBoolean(String.valueOf(v).trim());
+                }
+            }
+        }
         String env = environment.getProperty("SECKILL_MQ_ENABLED");
         if (env != null && !env.isBlank()) {
             return Boolean.parseBoolean(env.trim());
         }
         return false;
+    }
+
+    @Override
+    public int getOrder() {
+        return Ordered.LOWEST_PRECEDENCE;
     }
 }

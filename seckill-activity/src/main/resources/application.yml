@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: seckill-activity
+  autoconfigure:
+    exclude: ${SECKILL_MQ_AUTOCONFIG_EXCLUDE:org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration}
   datasource:
     url: ${MYSQL_URL:jdbc:mysql://mysql:3306/seckill?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
     username: ${MYSQL_USER:root}
