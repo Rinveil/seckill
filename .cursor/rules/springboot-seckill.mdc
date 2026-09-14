@@ -8,7 +8,7 @@ alwaysApply: true
 1. 遵循 Java Spring Boot 规范，使用 JDK 17、Maven，使用 Lombok；数据库访问统一使用 **MyBatis-Plus**。
 2. 高并发场景优先考虑：缓存、分布式锁、防超卖、限流、幂等。
 3. 修改代码遵循最小改动原则，不要一次性大范围重构；改动后输出关键变更说明；**每完成 roadmap 一步即 git commit 并 push 到远程**。
-4. 使用 Redis 做库存预扣、RocketMQ 异步削峰时，要考虑消息丢失、重复消费。
+4. 使用 Redis 做库存预扣、RabbitMQ 异步削峰时，要考虑消息丢失、重复消费。
 5. SQL 禁止大 offset 分页，禁止循环数据库查询；优先使用连接池。
 6. 输出代码之后，主动提示潜在并发风险点。
 7. 压测命令须向我确认。**已弃用 self-hosted Runner。** 每完成一步：git commit → push → Agent **主动本机部署**（`./infra/scripts/deploy-local.sh <改动模块>`，全量用 `ci-deploy.sh`）。见 `docs/ci-cd.md`。

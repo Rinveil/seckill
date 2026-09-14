@@ -13,15 +13,12 @@ import com.seckill.common.mq.ActivityExpireMessage;
 import com.seckill.common.mq.ActivityMqConstants;
 import com.seckill.common.redis.SeckillRedisKeys;
 import com.seckill.common.result.ResultCode;
-import org.apache.rocketmq.client.producer.SendResult;
-import org.apache.rocketmq.client.producer.SendStatus;
-import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -44,20 +41,20 @@ public class ActivityService {
 
     private final ActivityMapper activityMapper;
     private final StringRedisTemplate stringRedisTemplate;
-    private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
+    private final ObjectProvider<RabbitTemplate> rabbitTemplate;
     private final JdbcTemplate jdbcTemplate;
     private final SeckillFeatureProperties featureProperties;
 
     public ActivityService(
             ActivityMapper activityMapper,
             StringRedisTemplate stringRedisTemplate,
-            ObjectProvider<RocketMQTemplate> rocketMQTemplate,
+            ObjectProvider<RabbitTemplate> rabbitTemplate,
             JdbcTemplate jdbcTemplate,
             SeckillFeatureProperties featureProperties
     ) {
         this.activityMapper = activityMapper;
         this.stringRedisTemplate = stringRedisTemplate;
-        this.rocketMQTemplate = rocketMQTemplate;
+        this.rabbitTemplate = rabbitTemplate;
         this.jdbcTemplate = jdbcTemplate;
         this.featureProperties = featureProperties;
     }
@@ -256,21 +253,22 @@ public class ActivityService {
         if (!featureProperties.mqEnabled()) {
             return;
         }
-        RocketMQTemplate template = rocketMQTemplate.getIfAvailable();
+        RabbitTemplate template = rabbitTemplate.getIfAvailable();
         if (template == null) {
-            log.warn("RocketMQTemplate missing, skip activity expire schedule. id={}", activityId);
+            log.warn("RabbitTemplate missing, skip activity expire schedule. id={}", activityId);
             return;
         }
         long ttl = Math.max(delayMs, 1000L);
         try {
-            SendResult result = template.syncSendDelayTimeMills(
-                    ActivityMqConstants.TOPIC_EXPIRE,
-                    MessageBuilder.withPayload(new ActivityExpireMessage(activityId)).build(),
-                    ttl
+            template.convertAndSend(
+                    ActivityMqConstants.EXCHANGE,
+                    ActivityMqConstants.ROUTING_KEY_DELAY,
+                    new ActivityExpireMessage(activityId),
+                    msg -> {
+                        msg.getMessageProperties().setExpiration(String.valueOf(ttl));
+                        return msg;
+                    }
             );
-            if (result == null || result.getSendStatus() != SendStatus.SEND_OK) {
-                throw new IllegalStateException("rocketmq delay send failed: " + result);
-            }
         } catch (RuntimeException ex) {
             log.warn("schedule activity expire failed, scan job will cover. id={}", activityId, ex);
         }

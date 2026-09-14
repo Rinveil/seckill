@@ -15,7 +15,7 @@
 7. `order`：MQ 建单 + Mock 支付 + 取消回滚  
 8. 订单支付超时（3 分钟）+ 活动 `end_at` 自动关抢  
 9. 活动状态机 DRAFT→PREHEATED→OPEN→CLOSED（终态，同活动不复用）  
-10. RocketMQ 延迟关单/关抢 + 扫表兜底 + 库存对账  
+10. RabbitMQ 延迟关单/关抢 + 扫表兜底 + 库存对账  
 11. 用户管理（列表/创建/启停/改角色/重置密码）  
 12. 轻量压测 — 见 [test-report.md](./test-report.md)  
 13. （后置）限流、真实支付态

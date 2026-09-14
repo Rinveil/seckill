@@ -58,7 +58,7 @@
    /    |     |     \
  user activity core order
    \    |     |     /
-  共享 MySQL(PVC)  Redis(库存)  RocketMQ（可用 seckill.mq.enabled 关闭）
+  共享 MySQL(PVC)  Redis(库存)  RabbitMQ（可用 seckill.mq.enabled 关闭）
 ```
 
 | 模块 | 职责 |
@@ -67,8 +67,8 @@
 | `seckill-gateway` | 路由、CORS、JWT 校验与用户透传 |
 | `seckill-user` | 注册(USER)、登录、种子 ADMIN、`/me`、**用户管理（ADMIN）**、签发 JWT |
 | `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账 |
-| `seckill-core` | Redis Lua 预扣（限 1）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
-| `seckill-order` | MQ/同步幂等建单；Mock 支付；超时关单（MQ 延迟或扫表，均可开关）；取消回滚 |
+| `seckill-core` | Redis Lua 预扣（限 1）；`seckill.mq.enabled=true` 时 RabbitMQ 投递，否则 HTTP 同步调 order 建单 |
+| `seckill-order` | MQ/同步幂等建单；Mock 支付；超时关单（TTL+DLX 或扫表，均可开关）；取消回滚 |
 | `infra` | K8s（NodePort、PVC、arm64 镜像） |
 
 ## 4. 鉴权（JWT）
@@ -95,17 +95,17 @@
 
 | 开关 | 关闭时行为 |
 |---|---|
-| `seckill.mq.enabled=false` | 抢购不经 RocketMQ：core HTTP 同步调 order `/api/order/internal/create`；不注册 MQ Listener；不投延迟关单/关抢；排除 RocketMQ 自动配置（可停 NameServer/Broker） |
+| `seckill.mq.enabled=false` | 抢购不经 RabbitMQ：core HTTP 同步调 order `/api/order/internal/create`；不注册 MQ Listener；不投延迟关单/关抢；排除 RabbitMQ 自动配置（可停 Broker） |
 | `seckill.schedule.enabled=false` | 不注册订单过期扫表、活动到期扫表、库存对账定时任务 |
 
-本机默认与 K8s 当前均为 **关闭**。重新开启：环境变量 `SECKILL_MQ_ENABLED=true`、`SECKILL_SCHEDULE_ENABLED=true`，并把 `infra/k8s/12-rocketmq.yaml` 的 `replicas` 改回 `1`。
+本机默认与 K8s 当前均为 **关闭**。重新开启：环境变量 `SECKILL_MQ_ENABLED=true`、`SECKILL_SCHEDULE_ENABLED=true`，并把 `infra/k8s/12-rabbitmq.yaml` 的 `replicas` 改回 `1`。
 
 
 
 - Namespace：`seckill`；镜像 **linux/arm64**  
 - Docker 内存约 **8GB**；JVM 建议 256–512MB/服务  
 - **NodePort** 暴露前端与（或统一）入口；`/api` → gateway  
-- MySQL / Redis / RocketMQ Broker 使用 **PVC**  
+- MySQL / Redis / RabbitMQ 使用 **PVC**  
 - 集群内 Service DNS；禁止 `127.0.0.1`  
 
 ### 并发风险（实现时会再提示）
@@ -129,7 +129,7 @@
 7. `order`：MQ 建单 + **Mock 支付成功** + **取消并回滚库存**  
 8. 订单支付超时（3 分钟）+ 活动 `end_at` 自动关抢  
 9. 活动状态机 DRAFT→PREHEATED→OPEN→CLOSED（终态不复用）  
-10. RocketMQ 延迟关单/关抢 + 扫表兜底 + 库存对账  
+10. RabbitMQ 延迟关单/关抢 + 扫表兜底 + 库存对账  
 11. 用户管理（列表/创建/启停/改角色/重置密码）  
 12. 轻量压测（~300 QPS / 0 超卖）— 结果见 [test-report.md](./test-report.md)  
 13. （后置）限流、真实支付态

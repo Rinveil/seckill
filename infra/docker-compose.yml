@@ -18,35 +18,15 @@ services:
     ports:
       - "6379:6379"
 
-  # 本地联调参考：生产以 K8s infra/k8s/12-rocketmq.yaml 为准
-  rocketmq-namesrv:
-    image: apache/rocketmq:5.1.4
-    container_name: seckill-rocketmq-namesrv
-    command: ["sh", "mqnamesrv"]
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: seckill-rabbitmq
     environment:
-      JAVA_OPT_EXT: "-Xms256m -Xmx256m"
+      RABBITMQ_DEFAULT_USER: seckill
+      RABBITMQ_DEFAULT_PASS: seckill
     ports:
-      - "9876:9876"
-
-  rocketmq-broker:
-    image: apache/rocketmq:5.1.4
-    container_name: seckill-rocketmq-broker
-    depends_on:
-      - rocketmq-namesrv
-    command:
-      - sh
-      - mqbroker
-      - -n
-      - rocketmq-namesrv:9876
-      - -c
-      - /home/rocketmq/rocketmq-5.1.4/conf/broker.conf
-    environment:
-      JAVA_OPT_EXT: "-Xms256m -Xmx512m"
-      NAMESRV_ADDR: rocketmq-namesrv:9876
-    ports:
-      - "10909:10909"
-      - "10911:10911"
-      - "10912:10912"
+      - "5672:5672"
+      - "15672:15672"
 
 volumes:
   mysql-data:
