@@ -15,6 +15,13 @@ rocketmq:
     group: seckill-core-producer
     send-message-timeout: 5000
 
+seckill:
+  mq:
+    enabled: ${SECKILL_MQ_ENABLED:false}
+  schedule:
+    enabled: ${SECKILL_SCHEDULE_ENABLED:false}
+  order-uri: ${SECKILL_ORDER_URI:http://seckill-order:8084}
+
 management:
   endpoints:
     web:

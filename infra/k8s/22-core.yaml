@@ -32,6 +32,12 @@ spec:
               value: "6379"
             - name: ROCKETMQ_NAME_SERVER
               value: rocketmq-namesrv:9876
+            - name: SECKILL_MQ_ENABLED
+              value: "false"
+            - name: SECKILL_SCHEDULE_ENABLED
+              value: "false"
+            - name: SECKILL_ORDER_URI
+              value: http://seckill-order:8084
           resources:
             requests:
               memory: 128Mi

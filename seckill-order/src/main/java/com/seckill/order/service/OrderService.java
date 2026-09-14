@@ -2,6 +2,7 @@ package com.seckill.order.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.seckill.common.config.SeckillFeatureProperties;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.mq.OrderCreateMessage;
 import com.seckill.common.mq.OrderExpireMessage;
@@ -17,6 +18,7 @@ import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,21 +42,24 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final JdbcTemplate jdbcTemplate;
     private final StringRedisTemplate stringRedisTemplate;
-    private final RocketMQTemplate rocketMQTemplate;
+    private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
     private final OrderProperties orderProperties;
+    private final SeckillFeatureProperties featureProperties;
 
     public OrderService(
             OrderMapper orderMapper,
             JdbcTemplate jdbcTemplate,
             StringRedisTemplate stringRedisTemplate,
-            RocketMQTemplate rocketMQTemplate,
-            OrderProperties orderProperties
+            ObjectProvider<RocketMQTemplate> rocketMQTemplate,
+            OrderProperties orderProperties,
+            SeckillFeatureProperties featureProperties
     ) {
         this.orderMapper = orderMapper;
         this.jdbcTemplate = jdbcTemplate;
         this.stringRedisTemplate = stringRedisTemplate;
         this.rocketMQTemplate = rocketMQTemplate;
         this.orderProperties = orderProperties;
+        this.featureProperties = featureProperties;
     }
 
     /**
@@ -211,19 +216,27 @@ public class OrderService {
     }
 
     private void scheduleExpire(String orderNo, int expireMinutes) {
+        if (!featureProperties.mqEnabled()) {
+            return;
+        }
+        RocketMQTemplate template = rocketMQTemplate.getIfAvailable();
+        if (template == null) {
+            log.warn("RocketMQTemplate missing, skip expire schedule. orderNo={}", orderNo);
+            return;
+        }
         long ttlMs = Math.max(TimeUnit.MINUTES.toMillis(expireMinutes), 1000L);
         try {
             // 默认支付时限 3min 时走 delayLevel=7；其它时长用 Timer 延迟（需 broker timerWheelEnable）
             SendResult result;
             if (expireMinutes == 3) {
-                result = rocketMQTemplate.syncSend(
+                result = template.syncSend(
                         OrderMqConstants.TOPIC_EXPIRE,
                         MessageBuilder.withPayload(new OrderExpireMessage(orderNo)).build(),
                         5000,
                         OrderMqConstants.DELAY_LEVEL_3_MIN
                 );
             } else {
-                result = rocketMQTemplate.syncSendDelayTimeMills(
+                result = template.syncSendDelayTimeMills(
                         OrderMqConstants.TOPIC_EXPIRE,
                         MessageBuilder.withPayload(new OrderExpireMessage(orderNo)).build(),
                         ttlMs

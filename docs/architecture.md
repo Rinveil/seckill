@@ -58,7 +58,7 @@
    /    |     |     \
  user activity core order
    \    |     |     /
-  共享 MySQL(PVC)  Redis(库存)  RocketMQ
+  共享 MySQL(PVC)  Redis(库存)  RocketMQ（可用 seckill.mq.enabled 关闭）
 ```
 
 | 模块 | 职责 |
@@ -67,8 +67,8 @@
 | `seckill-gateway` | 路由、CORS、JWT 校验与用户透传 |
 | `seckill-user` | 注册(USER)、登录、种子 ADMIN、`/me`、**用户管理（ADMIN）**、签发 JWT |
 | `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账 |
-| `seckill-core` | Redis Lua 预扣（限 1）；RocketMQ 同步投递建单；失败自动回滚库存 |
-| `seckill-order` | MQ 幂等建单；Mock 支付；超时关单（延迟 Level/Timer + 扫表）；取消回滚 |
+| `seckill-core` | Redis Lua 预扣（限 1）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
+| `seckill-order` | MQ/同步幂等建单；Mock 支付；超时关单（MQ 延迟或扫表，均可开关）；取消回滚 |
 | `infra` | K8s（NodePort、PVC、arm64 镜像） |
 
 ## 4. 鉴权（JWT）
@@ -91,7 +91,16 @@
 活动到期/手动关：OPEN→CLOSED（终态）→ 删 Redis open；不可再预热开抢
 ```
 
-## 6. 运行时（Docker Desktop K8s）
+### 功能开关（`seckill.mq` / `seckill.schedule`）
+
+| 开关 | 关闭时行为 |
+|---|---|
+| `seckill.mq.enabled=false` | 抢购不经 RocketMQ：core HTTP 同步调 order `/api/order/internal/create`；不注册 MQ Listener；不投延迟关单/关抢；排除 RocketMQ 自动配置（可停 NameServer/Broker） |
+| `seckill.schedule.enabled=false` | 不注册订单过期扫表、活动到期扫表、库存对账定时任务 |
+
+本机默认与 K8s 当前均为 **关闭**。重新开启：环境变量 `SECKILL_MQ_ENABLED=true`、`SECKILL_SCHEDULE_ENABLED=true`，并把 `infra/k8s/12-rocketmq.yaml` 的 `replicas` 改回 `1`。
+
+
 
 - Namespace：`seckill`；镜像 **linux/arm64**  
 - Docker 内存约 **8GB**；JVM 建议 256–512MB/服务  

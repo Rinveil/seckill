@@ -43,7 +43,7 @@ metadata:
   labels:
     app: rocketmq-namesrv
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: rocketmq-namesrv
@@ -102,7 +102,7 @@ metadata:
   labels:
     app: rocketmq-broker
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: rocketmq-broker

@@ -7,6 +7,7 @@ import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * 异常仅打日志（等价于原 DLQ 人工观察）；扫表/对账兜底。
  */
 @Component
+@ConditionalOnProperty(prefix = "seckill.mq", name = "enabled", havingValue = "true")
 @RocketMQMessageListener(
         topic = OrderMqConstants.TOPIC_CREATE,
         consumerGroup = OrderMqConstants.CG_CREATE

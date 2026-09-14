@@ -21,6 +21,10 @@ rocketmq:
     send-message-timeout: 5000
 
 seckill:
+  mq:
+    enabled: ${SECKILL_MQ_ENABLED:false}
+  schedule:
+    enabled: ${SECKILL_SCHEDULE_ENABLED:false}
   order:
     expire-minutes: ${ORDER_EXPIRE_MINUTES:3}
     expire-scan-ms: ${ORDER_EXPIRE_SCAN_MS:30000}

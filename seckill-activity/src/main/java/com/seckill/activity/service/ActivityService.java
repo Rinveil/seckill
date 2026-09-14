@@ -7,6 +7,7 @@ import com.seckill.activity.dto.ActivityUpdateRequest;
 import com.seckill.activity.dto.ActivityView;
 import com.seckill.activity.dto.StockReconcileView;
 import com.seckill.activity.mapper.ActivityMapper;
+import com.seckill.common.config.SeckillFeatureProperties;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.mq.ActivityExpireMessage;
 import com.seckill.common.mq.ActivityMqConstants;
@@ -17,6 +18,7 @@ import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.support.MessageBuilder;
@@ -42,19 +44,22 @@ public class ActivityService {
 
     private final ActivityMapper activityMapper;
     private final StringRedisTemplate stringRedisTemplate;
-    private final RocketMQTemplate rocketMQTemplate;
+    private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
     private final JdbcTemplate jdbcTemplate;
+    private final SeckillFeatureProperties featureProperties;
 
     public ActivityService(
             ActivityMapper activityMapper,
             StringRedisTemplate stringRedisTemplate,
-            RocketMQTemplate rocketMQTemplate,
-            JdbcTemplate jdbcTemplate
+            ObjectProvider<RocketMQTemplate> rocketMQTemplate,
+            JdbcTemplate jdbcTemplate,
+            SeckillFeatureProperties featureProperties
     ) {
         this.activityMapper = activityMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.rocketMQTemplate = rocketMQTemplate;
         this.jdbcTemplate = jdbcTemplate;
+        this.featureProperties = featureProperties;
     }
 
     public List<ActivityView> list() {
@@ -248,9 +253,17 @@ public class ActivityService {
     }
 
     private void scheduleExpire(long activityId, long delayMs) {
+        if (!featureProperties.mqEnabled()) {
+            return;
+        }
+        RocketMQTemplate template = rocketMQTemplate.getIfAvailable();
+        if (template == null) {
+            log.warn("RocketMQTemplate missing, skip activity expire schedule. id={}", activityId);
+            return;
+        }
         long ttl = Math.max(delayMs, 1000L);
         try {
-            SendResult result = rocketMQTemplate.syncSendDelayTimeMills(
+            SendResult result = template.syncSendDelayTimeMills(
                     ActivityMqConstants.TOPIC_EXPIRE,
                     MessageBuilder.withPayload(new ActivityExpireMessage(activityId)).build(),
                     ttl

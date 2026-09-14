@@ -43,6 +43,10 @@ spec:
               value: rocketmq-namesrv:9876
             - name: ORDER_EXPIRE_MINUTES
               value: "3"
+            - name: SECKILL_MQ_ENABLED
+              value: "false"
+            - name: SECKILL_SCHEDULE_ENABLED
+              value: "false"
           resources:
             requests:
               memory: 128Mi

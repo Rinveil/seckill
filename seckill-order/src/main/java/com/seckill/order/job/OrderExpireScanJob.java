@@ -3,11 +3,13 @@ package com.seckill.order.job;
 import com.seckill.order.service.OrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /** 延迟队列兜底：扫过期未支付订单。 */
 @Component
+@ConditionalOnProperty(prefix = "seckill.schedule", name = "enabled", havingValue = "true")
 public class OrderExpireScanJob {
 
     private static final Logger log = LoggerFactory.getLogger(OrderExpireScanJob.class);

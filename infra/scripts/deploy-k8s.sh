@@ -24,8 +24,15 @@ kubectl -n seckill rollout restart \
 echo "==> waiting for deployments..."
 kubectl -n seckill rollout status deploy/mysql --timeout=180s || true
 kubectl -n seckill rollout status deploy/redis --timeout=120s || true
-kubectl -n seckill rollout status deploy/rocketmq-namesrv --timeout=180s || true
-kubectl -n seckill rollout status deploy/rocketmq-broker --timeout=240s || true
+# RocketMQ 可用 replicas=0 停用；仅在期望有副本时等待
+for d in rocketmq-namesrv rocketmq-broker; do
+  want=$(kubectl -n seckill get deploy "$d" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
+  if [[ "${want:-0}" != "0" ]]; then
+    kubectl -n seckill rollout status "deploy/${d}" --timeout=240s || true
+  else
+    echo "==> skip wait ${d} (replicas=0)"
+  fi
+done
 kubectl -n seckill rollout status deploy/seckill-user --timeout=240s
 kubectl -n seckill rollout status deploy/seckill-activity --timeout=240s
 kubectl -n seckill rollout status deploy/seckill-core --timeout=240s
