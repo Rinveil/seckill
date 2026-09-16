@@ -13,13 +13,16 @@ import com.seckill.order.config.OrderProperties;
 import com.seckill.order.domain.SeckillOrder;
 import com.seckill.order.dto.OrderView;
 import com.seckill.order.mapper.OrderMapper;
+import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +42,7 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final JdbcTemplate jdbcTemplate;
     private final StringRedisTemplate stringRedisTemplate;
-    private final ObjectProvider<RabbitTemplate> rabbitTemplate;
+    private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
     private final OrderProperties orderProperties;
     private final SeckillFeatureProperties featureProperties;
 
@@ -47,14 +50,14 @@ public class OrderService {
             OrderMapper orderMapper,
             JdbcTemplate jdbcTemplate,
             StringRedisTemplate stringRedisTemplate,
-            ObjectProvider<RabbitTemplate> rabbitTemplate,
+            ObjectProvider<RocketMQTemplate> rocketMQTemplate,
             OrderProperties orderProperties,
             SeckillFeatureProperties featureProperties
     ) {
         this.orderMapper = orderMapper;
         this.jdbcTemplate = jdbcTemplate;
         this.stringRedisTemplate = stringRedisTemplate;
-        this.rabbitTemplate = rabbitTemplate;
+        this.rocketMQTemplate = rocketMQTemplate;
         this.orderProperties = orderProperties;
         this.featureProperties = featureProperties;
     }
@@ -216,22 +219,32 @@ public class OrderService {
         if (!featureProperties.mqEnabled()) {
             return;
         }
-        RabbitTemplate template = rabbitTemplate.getIfAvailable();
+        RocketMQTemplate template = rocketMQTemplate.getIfAvailable();
         if (template == null) {
-            log.warn("RabbitTemplate missing, skip expire schedule. orderNo={}", orderNo);
+            log.warn("RocketMQTemplate missing, skip expire schedule. orderNo={}", orderNo);
             return;
         }
         long ttlMs = Math.max(TimeUnit.MINUTES.toMillis(expireMinutes), 1000L);
         try {
-            template.convertAndSend(
-                    OrderMqConstants.EXCHANGE,
-                    OrderMqConstants.ROUTING_KEY_DELAY,
-                    new OrderExpireMessage(orderNo),
-                    msg -> {
-                        msg.getMessageProperties().setExpiration(String.valueOf(ttlMs));
-                        return msg;
-                    }
-            );
+            // 默认支付时限 3min 时走 delayLevel=7；其它时长用 Timer 延迟（需 broker timerWheelEnable）
+            SendResult result;
+            if (expireMinutes == 3) {
+                result = template.syncSend(
+                        OrderMqConstants.TOPIC_EXPIRE,
+                        MessageBuilder.withPayload(new OrderExpireMessage(orderNo)).build(),
+                        5000,
+                        OrderMqConstants.DELAY_LEVEL_3_MIN
+                );
+            } else {
+                result = template.syncSendDelayTimeMills(
+                        OrderMqConstants.TOPIC_EXPIRE,
+                        MessageBuilder.withPayload(new OrderExpireMessage(orderNo)).build(),
+                        ttlMs
+                );
+            }
+            if (result == null || result.getSendStatus() != SendStatus.SEND_OK) {
+                throw new IllegalStateException("rocketmq delay send failed: " + result);
+            }
         } catch (RuntimeException ex) {
             log.warn("schedule order expire failed, scan job will cover. orderNo={}", orderNo, ex);
         }

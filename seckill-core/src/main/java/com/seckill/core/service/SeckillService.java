@@ -7,9 +7,11 @@ import com.seckill.common.mq.OrderMqConstants;
 import com.seckill.common.result.ResultCode;
 import com.seckill.core.client.OrderCreateClient;
 import com.seckill.core.redis.StockLuaExecutor;
+import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -24,18 +26,18 @@ public class SeckillService {
 
     private final StockLuaExecutor stockLuaExecutor;
     private final SeckillFeatureProperties featureProperties;
-    private final ObjectProvider<RabbitTemplate> rabbitTemplate;
+    private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
     private final OrderCreateClient orderCreateClient;
 
     public SeckillService(
             StockLuaExecutor stockLuaExecutor,
             SeckillFeatureProperties featureProperties,
-            ObjectProvider<RabbitTemplate> rabbitTemplate,
+            ObjectProvider<RocketMQTemplate> rocketMQTemplate,
             OrderCreateClient orderCreateClient
     ) {
         this.stockLuaExecutor = stockLuaExecutor;
         this.featureProperties = featureProperties;
-        this.rabbitTemplate = rabbitTemplate;
+        this.rocketMQTemplate = rocketMQTemplate;
         this.orderCreateClient = orderCreateClient;
     }
 
@@ -74,14 +76,13 @@ public class SeckillService {
             orderCreateClient.createSync(message);
             return;
         }
-        RabbitTemplate template = rabbitTemplate.getIfAvailable();
+        RocketMQTemplate template = rocketMQTemplate.getIfAvailable();
         if (template == null) {
-            throw new IllegalStateException("RabbitTemplate missing while seckill.mq.enabled=true");
+            throw new IllegalStateException("RocketMQTemplate missing while seckill.mq.enabled=true");
         }
-        template.convertAndSend(
-                OrderMqConstants.EXCHANGE,
-                OrderMqConstants.ROUTING_KEY_CREATE,
-                message
-        );
+        SendResult result = template.syncSend(OrderMqConstants.TOPIC_CREATE, message);
+        if (result == null || result.getSendStatus() != SendStatus.SEND_OK) {
+            throw new IllegalStateException("rocketmq send failed: " + result);
+        }
     }
 }

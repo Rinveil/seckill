@@ -39,20 +39,8 @@ spec:
               value: redis
             - name: SPRING_DATA_REDIS_PORT
               value: "6379"
-            - name: SPRING_RABBITMQ_HOST
-              value: rabbitmq
-            - name: SPRING_RABBITMQ_PORT
-              value: "5672"
-            - name: SPRING_RABBITMQ_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: seckill-secrets
-                  key: RABBITMQ_DEFAULT_USER
-            - name: SPRING_RABBITMQ_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: seckill-secrets
-                  key: RABBITMQ_DEFAULT_PASS
+            - name: ROCKETMQ_NAME_SERVER
+              value: rocketmq-namesrv:9876
             - name: SECKILL_MQ_ENABLED
               value: "false"
             - name: SECKILL_SCHEDULE_ENABLED

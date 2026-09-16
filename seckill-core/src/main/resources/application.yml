@@ -5,17 +5,18 @@ spring:
   application:
     name: seckill-core
   autoconfigure:
-    # MQ 关闭时排除；开启时设 SECKILL_MQ_AUTOCONFIG_EXCLUDE=（空）并 SECKILL_MQ_ENABLED=true
-    exclude: ${SECKILL_MQ_AUTOCONFIG_EXCLUDE:org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration}
+    # MQ 关闭时排除；开启 MQ 时设 SECKILL_MQ_AUTOCONFIG_EXCLUDE=（空）并 SECKILL_MQ_ENABLED=true
+    exclude: ${SECKILL_MQ_AUTOCONFIG_EXCLUDE:org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration}
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:redis}
       port: ${SPRING_DATA_REDIS_PORT:6379}
-  rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
-    port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:seckill}
-    password: ${SPRING_RABBITMQ_PASSWORD:seckill}
+
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:rocketmq-namesrv:9876}
+  producer:
+    group: seckill-core-producer
+    send-message-timeout: 5000
 
 seckill:
   mq:

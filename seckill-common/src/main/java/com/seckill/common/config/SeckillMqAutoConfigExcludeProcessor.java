@@ -15,12 +15,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * MQ 关闭时排除 RabbitMQ 自动配置，避免 Broker 停用后应用仍创建连接。
+ * MQ 关闭时排除 RocketMQ 自动配置，避免 NameServer 停用后应用仍创建 Producer。
+ * 在 ConfigData 之后执行（LOWEST_PRECEDENCE），以便读到 application.yml / 环境变量。
  */
 public class SeckillMqAutoConfigExcludeProcessor implements EnvironmentPostProcessor, Ordered {
 
-    private static final String RABBIT_AUTO =
-            "org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration";
+    private static final String ROCKET_MQ_AUTO =
+            "org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration";
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
@@ -35,7 +36,7 @@ public class SeckillMqAutoConfigExcludeProcessor implements EnvironmentPostProce
                     .filter(s -> !s.isEmpty())
                     .forEach(excludes::add);
         }
-        excludes.add(RABBIT_AUTO);
+        excludes.add(ROCKET_MQ_AUTO);
         environment.getPropertySources().addFirst(new MapPropertySource(
                 "seckillMqOffExclude",
                 Map.of("spring.autoconfigure.exclude", String.join(",", new ArrayList<>(excludes)))
@@ -47,6 +48,7 @@ public class SeckillMqAutoConfigExcludeProcessor implements EnvironmentPostProce
         if (bound != null) {
             return bound;
         }
+        // 直接读系统环境（未经过 relaxed binding 时）
         for (org.springframework.core.env.PropertySource<?> ps : environment.getPropertySources()) {
             if (ps instanceof SystemEnvironmentPropertySource sys) {
                 Object v = sys.getProperty("SECKILL_MQ_ENABLED");
