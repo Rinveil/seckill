@@ -23,7 +23,7 @@ spec:
             - containerPort: 8084
           env:
             - name: JAVA_OPTS
-              value: "-Xms64m -Xmx192m"
+              value: "-Xms128m -Xmx256m"
             - name: SERVER_PORT
               value: "8084"
             - name: MYSQL_URL
@@ -44,9 +44,11 @@ spec:
             - name: ORDER_EXPIRE_MINUTES
               value: "3"
             - name: SECKILL_MQ_ENABLED
-              value: "false"
+              value: "true"
             - name: SECKILL_SCHEDULE_ENABLED
-              value: "false"
+              value: "true"
+            - name: SECKILL_MQ_AUTOCONFIG_EXCLUDE
+              value: ""
           resources:
             requests:
               memory: 128Mi

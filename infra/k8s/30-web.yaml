@@ -48,6 +48,8 @@ metadata:
   namespace: seckill
 spec:
   type: NodePort
+  externalIPs:
+    - 192.168.2.53
   selector:
     app: seckill-web
   ports:

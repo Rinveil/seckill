@@ -23,7 +23,7 @@ spec:
             - containerPort: 8081
           env:
             - name: JAVA_OPTS
-              value: "-Xms64m -Xmx192m"
+              value: "-Xms128m -Xmx256m"
             - name: SERVER_PORT
               value: "8081"
             - name: MYSQL_URL

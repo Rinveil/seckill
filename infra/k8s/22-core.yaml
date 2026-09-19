@@ -23,7 +23,7 @@ spec:
             - containerPort: 8083
           env:
             - name: JAVA_OPTS
-              value: "-Xms64m -Xmx192m"
+              value: "-Xms128m -Xmx256m"
             - name: SERVER_PORT
               value: "8083"
             - name: SPRING_DATA_REDIS_HOST
@@ -33,9 +33,11 @@ spec:
             - name: ROCKETMQ_NAME_SERVER
               value: rocketmq-namesrv:9876
             - name: SECKILL_MQ_ENABLED
-              value: "false"
+              value: "true"
             - name: SECKILL_SCHEDULE_ENABLED
-              value: "false"
+              value: "true"
+            - name: SECKILL_MQ_AUTOCONFIG_EXCLUDE
+              value: ""
             - name: SECKILL_ORDER_URI
               value: http://seckill-order:8084
           resources:
