@@ -63,7 +63,21 @@ spec:
 - macOS 防火墙需放行 30080 入站
 - IP 变了改 `30-web.yaml` 的 `externalIPs`
 
-## 6. 部署命令
+## 6. 访问地址
+
+| 角色 | 地址 | 说明 |
+|---|---|---|
+| 商城浏览（公开） | `http://localhost:30080/mall` | 免登录卡片浏览 |
+| 登录页 | `http://localhost:30080/login` | admin / admin123 |
+| 后台控制面板（ADMIN） | `http://localhost:30080/ops/activities` | 活动管理（登录后默认进） |
+| 后台订单管理 | `http://localhost:30080/ops/orders` | ADMIN |
+| 后台用户管理 | `http://localhost:30080/ops/users` | ADMIN |
+| 活动会场（自测抢购） | `http://localhost:30080/seckill` | 普通用户登录后默认进 |
+| 跨机访问 | `http://192.168.2.53:30080/mall` | 同 WiFi 其他机器 |
+
+代码导读见 [code-walkthrough-order.md](./code-walkthrough-order.md)。
+
+## 7. 部署命令
 
 ```bash
 # 前置：Docker Desktop 已开，Kubernetes Ready，分配 8GB
@@ -72,16 +86,16 @@ cd /Users/zheng/IdeaProjects/seckill
 kubectl -n seckill get pods              # 等全部 Ready
 ```
 
-## 7. 验证清单
+## 8. 验证清单
 
 - [ ] 全部 Pod `1/1 Running`（含 rocketmq-broker/namesrv）
-- [ ] 浏览器 `http://localhost:30080/mall` 看到商城卡片
+- [ ] 浏览器 `http://localhost:30080/mall` 看到商城卡片（正常商品，非测试数据）
 - [ ] `http://192.168.2.53:30080/mall` 跨机可访问
 - [ ] 登录 admin → 建活动 → 预热 → 开抢
 - [ ] 普通用户抢购 → 订单 CREATED → 支付 PAID
 - [ ] 不支付等 3 分钟 → 自动 EXPIRED + 回滚库存（MQ 延迟）
 - [ ] 对账 `consistent=true`
 
-## 8. 降占用回退
+## 9. 降占用回退
 
 若需再降：把 `SECKILL_MQ_ENABLED=false`、`SECKILL_SCHEDULE_ENABLED=false`，rocketmq replicas 改 0，JVM 回 `-Xmx192m`，limits 回 384Mi。约 2.2 GiB。
