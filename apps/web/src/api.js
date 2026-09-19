@@ -50,7 +50,7 @@ export function isAdmin() {
 
 /** 登录后默认落地页 */
 export function homePathForRole(role) {
-  return role === 'ADMIN' ? '/ops/activities' : '/seckill'
+  return role === 'ADMIN' ? '/ops/activities' : '/mall'
 }
 
 async function request(path, options = {}) {
@@ -97,6 +97,14 @@ export function me() {
 
 export function getActivities() {
   return request('/api/activity/list')
+}
+
+export function getMallList() {
+  return request('/api/mall/list')
+}
+
+export function getMallDetail(id) {
+  return request(`/api/mall/${id}`)
 }
 
 export function getActivity(id) {

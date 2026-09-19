@@ -14,6 +14,9 @@
         <el-menu-item-group title="自测抢购">
           <el-menu-item index="/seckill">活动会场</el-menu-item>
         </el-menu-item-group>
+        <el-menu-item-group title="浏览">
+          <el-menu-item index="/mall">商城首页</el-menu-item>
+        </el-menu-item-group>
       </el-menu>
     </el-aside>
     <el-container class="admin-main-wrap">

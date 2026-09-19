@@ -17,16 +17,18 @@ import UserManage from './views/UserManage.vue'
 import SeckillHome from './views/SeckillHome.vue'
 import Activity from './views/Activity.vue'
 import Result from './views/Result.vue'
+import Mall from './views/Mall.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', component: Login, meta: { public: true } },
     { path: '/register', component: Register, meta: { public: true } },
+    { path: '/mall', component: Mall, meta: { public: true } },
     {
       path: '/',
       component: AdminLayout,
-      redirect: () => (isAdmin() ? '/ops/activities' : '/seckill'),
+      redirect: () => (isAdmin() ? '/ops/activities' : '/mall'),
       children: [
         { path: 'ops/activities', component: ActivityManage, meta: { admin: true } },
         { path: 'ops/orders', component: OrderManage, meta: { admin: true } },

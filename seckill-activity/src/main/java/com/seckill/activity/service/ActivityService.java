@@ -5,6 +5,7 @@ import com.seckill.activity.domain.Activity;
 import com.seckill.activity.dto.ActivityCreateRequest;
 import com.seckill.activity.dto.ActivityUpdateRequest;
 import com.seckill.activity.dto.ActivityView;
+import com.seckill.activity.dto.MallView;
 import com.seckill.activity.dto.StockReconcileView;
 import com.seckill.activity.mapper.ActivityMapper;
 import com.seckill.common.config.SeckillFeatureProperties;
@@ -70,6 +71,24 @@ public class ActivityService {
 
     public ActivityView detail(long id) {
         return toView(requireActivity(id));
+    }
+
+    /** 商城公开列表：仅 PREHEATED/OPEN/CLOSED，不含 DRAFT。 */
+    public List<MallView> listForMall() {
+        return activityMapper.selectList(
+                new LambdaQueryWrapper<Activity>()
+                        .in(Activity::getStatus, Activity.STATUS_PREHEATED, Activity.STATUS_OPEN, Activity.STATUS_CLOSED)
+                        .orderByDesc(Activity::getId)
+        ).stream().map(this::toMallView).toList();
+    }
+
+    /** 商城公开详情：DRAFT 不对公开暴露。 */
+    public MallView detailForMall(long id) {
+        Activity entity = requireActivity(id);
+        if (statusOf(entity) == Activity.STATUS_DRAFT) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "活动不存在");
+        }
+        return toMallView(entity);
     }
 
     public ActivityView create(String role, ActivityCreateRequest request) {
@@ -378,6 +397,19 @@ public class ActivityService {
                 entity.getOriginPriceFen(),
                 entity.getStock(),
                 readRedisStock(entity.getId()),
+                statusName(statusOf(entity)),
+                toInstant(entity.getStartAt()),
+                toInstant(entity.getEndAt())
+        );
+    }
+
+    private MallView toMallView(Activity entity) {
+        return new MallView(
+                entity.getId(),
+                entity.getTitle(),
+                entity.getPriceFen(),
+                entity.getOriginPriceFen(),
+                entity.getStock() == null ? 0 : entity.getStock(),
                 statusName(statusOf(entity)),
                 toInstant(entity.getStartAt()),
                 toInstant(entity.getEndAt())

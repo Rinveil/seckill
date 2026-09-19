@@ -30,6 +30,7 @@
         <p class="auth-tip">
           演示管理员 admin / admin123<br />
           <router-link to="/register">注册普通用户</router-link>
+          · <router-link to="/mall">先逛商城</router-link>
         </p>
       </el-card>
     </div>

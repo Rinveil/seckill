@@ -21,7 +21,7 @@ spring:
         - id: activity
           uri: ${SECKILL_ACTIVITY_URI:http://seckill-activity:8082}
           predicates:
-            - Path=/api/activity/**
+            - Path=/api/activity/**,/api/mall/**
         - id: seckill
           uri: ${SECKILL_CORE_URI:http://seckill-core:8083}
           predicates:
@@ -38,6 +38,7 @@ seckill:
     whitelist:
       - /api/user/login
       - /api/user/register
+      - /api/mall/**
       - /actuator
 
 management:
