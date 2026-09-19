@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -32,6 +33,9 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     public static final String HEADER_USER_ID = "X-User-Id";
     public static final String HEADER_USER_ROLE = "X-User-Role";
     public static final String HEADER_USERNAME = "X-Username";
+
+    /** Ant 风格通配符匹配器，用于白名单中的 ** 等 glob 模式（如 /api/mall/**）。 */
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 
     private final SeckillGatewayProperties properties;
     private final ObjectMapper objectMapper;
@@ -91,7 +95,9 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     private boolean isWhitelisted(String path) {
         return properties.getAuth().getWhitelist().stream()
                 .filter(StringUtils::hasText)
-                .anyMatch(w -> path.equals(w) || path.startsWith(w + "/"));
+                .anyMatch(w -> w.contains("*")
+                        ? PATH_MATCHER.match(w, path)
+                        : path.equals(w) || path.startsWith(w + "/"));
     }
 
     private static ServerHttpRequest.Builder stripUserHeaders(ServerHttpRequest request) {
