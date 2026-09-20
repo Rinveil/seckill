@@ -1,8 +1,8 @@
 # 代码导读：从前端到完整订单链路
 
-> 阅读顺序：先看总览与时序，再按「文件入口」跳进源码。
-> 当前默认：`seckill.mq.enabled=true`、`seckill.schedule.enabled=true`（RocketMQ 异步建单 + 延迟关单/关抢 + 扫表兜底）。
-> 架构总览见 [architecture.md](./architecture.md)。
+> 阅读顺序：先看总览与时序，再按「文件入口」跳进源码。  
+> **当前 K8s**：`seckill.mq.enabled=true`、`seckill.schedule.enabled=true`。`application.yml` 默认是 false（裸起 Java 才关）。  
+> 架构：[architecture.md](./architecture.md)；并发与缺口：[risks.md](./risks.md)。
 
 ---
 
@@ -14,9 +14,9 @@
 | 网关 | `seckill-gateway` | 8080 | JWT 校验，注入 `X-User-*`，按路径转发 |
 | 用户 | `seckill-user` | 8081 | 注册/登录/JWT、用户管理 |
 | 活动 | `seckill-activity` | 8082 | 活动状态机、预热、开/关抢、Redis 库存、商城公开接口 |
-| 秒杀 | `seckill-core` | 8083 | Redis Lua 预扣 → 建单投递 |
+| 秒杀 | `seckill-core` | 8083 | 布隆 → Redis Lua 预扣 → 建单投递 |
 | 订单 | `seckill-order` | 8084 | 幂等落库、支付、取消、过期 |
-| 公共 | `seckill-common` | — | `Result`、MQ 消息体、Redis Key、功能开关 |
+| 公共 | `seckill-common` | — | `Result`、MQ 消息体、Redis Key、布隆、功能开关 |
 
 HTTP 统一经前端同源 `/api/**`（nginx 反代到 gateway）。
 
@@ -109,19 +109,22 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `l
 
 白名单：`/api/user/login`、`/api/user/register`、`/api/mall/**`、`/actuator`。
 
-`JwtAuthGlobalFilter`：去伪造头 → 验 JWT → 注入 `X-User-Id/Role/Username` → 失败返 401。
+`JwtAuthGlobalFilter`（order -100）：去伪造头 → 验 JWT → 注入 `X-User-Id/Role/Username` → 失败返 401。不查账号是否禁用。
 
-`RateLimitFilter`（order -110，早于 JWT）：仅 `/api/seckill/**`，按客户端 IP 令牌桶（默认 50 QPS、桶容量 10），超限 429。
+`RateLimitFilter`（order -110，早于 JWT）：仅 `/api/seckill/**`，按客户端 IP 令牌桶（默认 50 QPS、桶容量 10），超限 HTTP 429（body `code=429`，不是 1002）。
+
+缺口：`/api/order/**` 会把 `POST /api/order/internal/create` 一并转给 order，见 [risks.md](./risks.md)。
 
 ---
 
 ## 6. Core：预扣 + 建单
 
 `SeckillService.grab`：
-1. `StockLuaExecutor.deduct` → `-3`未开抢/`-1`重复/`-2`售罄
-2. 生成 `orderToken` + `OrderCreateMessage`
-3. `dispatchCreate`：mq=true→`RocketMQTemplate.syncSend`；mq=false→`OrderCreateClient.createSync`
-4. 失败→`rollback` + 抛「系统繁忙，库存已回滚」
+1. 布隆 `definitelyAbsent` → `1003`（未就绪则放行）
+2. `StockLuaExecutor.deduct` → `-3`未开抢/`-1`重复/`-2`售罄
+3. 生成 `orderToken` + `OrderCreateMessage`
+4. `dispatchCreate`：mq=true→`RocketMQTemplate.syncSend`；mq=false→`OrderCreateClient.createSync`（直连 order Service，不经网关）
+5. 失败→`rollback` + 抛「系统繁忙，库存已回滚」
 
 Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`stock<1`→-2；否则 DECR 库存 + INCR 已购计数。`limit` 来自 Redis `seckill:limit:{id}`（活动 `limitPerUser`，默认 1）。
 
@@ -134,11 +137,13 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 `createFromMessage`：查重→查价→`insert t_order(CREATED)`→`scheduleExpire`（MQ 延迟）→失败回滚 Redis。
 
 用户 API（`OrderController`，经网关）：
-- `GET /api/order/list` `GET /api/order/{orderNo}`（列表带 `activityTitle`）
-- `POST /api/order/{orderNo}/pay` → `PAID`（仅 CREATED 可付）
+- `GET /api/order/list` `GET /api/order/{orderNo}`（列表带 `activityTitle`，每条查一次活动标题）
+- `POST /api/order/{orderNo}/pay` → `PAID`（读 CREATED 后 `updateById`，**无 CAS**）
 - `POST /api/order/{orderNo}/cancel` → `CANCELLED` + Redis 回滚（已购计数 -1）
 
-关单/取消/过期互斥：`closeCreatedOrder` 用 DB 条件更新 `status=CREATED`，只成功一次，避免双重回滚。
+关单/取消互斥：`closeCreatedOrder` 用 DB 条件更新 `status=CREATED`。支付未走该 CAS，与过期并发时可能「已付 + 库存已回滚」，见 [risks.md](./risks.md)。
+
+集群内建单：`POST /api/order/internal/create`（MQ 关闭时 core 直连）。该路径目前也被网关转出。
 
 ---
 
@@ -157,7 +162,7 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 
 1. `apps/web/src/api.js` + `Mall.vue` + `Activity.vue` + `OrderManage.vue`
 2. `JwtAuthGlobalFilter` + gateway `application.yml`
-3. `SeckillRedisKeys` + `StockLuaExecutor`
+3. `SeckillRedisKeys` + `ActivityBloomFilter` + `StockLuaExecutor`
 4. `SeckillService` + `OrderCreateClient`
 5. `OrderService.createFromMessage` / `pay` / `cancel`
 6. `ActivityService.preheat` / `open` / `doClose`
@@ -167,8 +172,11 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 
 ## 10. 并发与一致性要点
 
+详见 [risks.md](./risks.md)。这里只留热路径口诀：
+
 1. 库存真相在 Redis；DB `stock` 是配置快照。对账：`init ≈ redis + CREATED + PAID`
-2. 限购：Lua `bought` 计数 vs `limit` 键；取消/超时 DECR 已购，同用户可再抢
+2. 限购：Lua `bought` vs `limit` 键；预热才写 `limit`；取消/超时 DECR 已购
 3. 预扣成功但建单失败：core/order 都会回滚 Redis
-4. 支付 vs 过期：靠 `CREATED` 条件更新互斥
-5. 活动手动关 vs 到期关：到期时若已非 OPEN 则跳过；扫表 + 延迟消息双保险
+4. 过期/取消：`CREATED` 条件更新互斥；**支付尚未 CAS**
+5. 活动手动关 vs 到期关：非 OPEN 则跳过；扫表 + 延迟消息；关时重建布隆
+6. 无效 `activityId`：布隆先挡；假阳性或未就绪走 Lua

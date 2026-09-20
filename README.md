@@ -1,37 +1,40 @@
 # 爆款秒杀系统
 
-IntelliJ 多模块工程：唯一 B 端（Vue3 + Element Plus）+ 网关 + 用户/活动/秒杀/订单。  
-**运行：Mac Docker Desktop K8s（全部容器）**；共享一个 MySQL；登录鉴权用 **JWT**。
+唯一 B 端（Vue3 + Element Plus）+ 网关 + 用户 / 活动 / 秒杀 / 订单。  
+**运行：Mac Docker Desktop K8s（全部容器）**；共享一个 MySQL；鉴权 **JWT**。
 
-目标架构见 [docs/architecture.md](docs/architecture.md)；落地顺序见 [docs/roadmap.md](docs/roadmap.md)；  
-压测报告（已归档，不再压测）见 [docs/test-report.md](docs/test-report.md)；  
-K8s 空壳部署见 [infra/k8s/README.md](infra/k8s/README.md)；  
-**本机部署**：`./infra/scripts/deploy-local.sh` / `ci-deploy.sh`，见 [docs/ci-cd.md](docs/ci-cd.md)。
+| 文档 | 内容 |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | 目标架构、状态机、开关、落地顺序 |
+| [docs/risks.md](docs/risks.md) | 并发风险与实现缺口（对照当前代码） |
+| [docs/code-walkthrough-order.md](docs/code-walkthrough-order.md) | 从前端到订单的代码导读 |
+| [docs/deploy-plan.md](docs/deploy-plan.md) | 本机资源与跨机访问 |
+| [docs/ci-cd.md](docs/ci-cd.md) | `deploy-local.sh` / `ci-deploy.sh` |
+| [docs/test-report.md](docs/test-report.md) | 压测归档（以后不再压测） |
+| [docs/roadmap.md](docs/roadmap.md) | 编号步骤（1–12 已完成） |
 
 ## 模块
 
 | 模块 | 容器内端口 | 说明 |
 |---|---|---|
-| `apps/web` | 80 | B 端（当前会场骨架，经 NodePort 30080） |
-| `seckill-gateway` | 8080 | 路由（集群 Service DNS） |
-| `seckill-user` | 8081 | 登录占位 → 后续 JWT |
-| `seckill-activity` | 8082 | 活动占位 |
-| `seckill-core` | 8083 | 秒杀占位（内存库存） |
-| `seckill-order` | 8084 | 订单占位 |
+| `apps/web` | 80 → NodePort 30080 | 登录/注册、商城、运营、抢购、订单 |
+| `seckill-gateway` | 8080 | JWT、CORS、抢购 IP 限流、按路径转发 |
+| `seckill-user` | 8081 | 注册/登录/JWT、用户管理、种子 ADMIN |
+| `seckill-activity` | 8082 | 活动状态机、预热、开/关抢、商城公开 API、布隆重建 |
+| `seckill-core` | 8083 | 布隆拦截 + Redis Lua 预扣 + MQ/HTTP 建单 |
+| `seckill-order` | 8084 | 幂等落库、Mock 支付、取消/过期回滚 |
+| `seckill-common` | — | Result、Redis Key、布隆、MQ 消息、开关 |
 | `infra/k8s` | — | Namespace / PVC / 中间件 / 业务清单 |
 
-## 第 1–2 步自测（K8s）
+## 本机跑起来
 
-1. 开启 Docker Desktop Kubernetes（约 8GB 内存）  
-2. 构建镜像：`./infra/scripts/build-images.sh`（或只建 user：见下）  
-3. 部署：`kubectl apply -f infra/k8s/`  
-4. 浏览器：http://localhost:30080  
+```bash
+# Docker Desktop Kubernetes Ready，内存约 8GB
+./infra/scripts/deploy-local.sh
+# 浏览器
+open http://localhost:30080/mall
+```
 
-### 用户 / 前端（第 2–4 步）
+种子账号：`admin` / `admin123`。密钥只在 K8s Secret / 环境变量。
 
-- 登录页：http://localhost:30080/login （种子 `admin` / `admin123`）  
-- `POST /api/user/register|login`，`GET /api/user/me`（需 Bearer）  
-- 网关校验 JWT，注入 `X-User-Id` / `X-User-Role`  
-- B 端：运营占位 + 自测抢购；Token 存 localStorage  
-
-密钥来自 K8s Secret（`JWT_SECRET` / MySQL 密码等），不写在业务配置明文里。
+当前 K8s：**RocketMQ 与扫表均开启**。压测不要跑 `load-test.py`。

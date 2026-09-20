@@ -29,9 +29,9 @@
 
 | 组件 | replicas | JVM | request | limit |
 |---|---|---|---|---|
-| rocketmq-broker | 1 | -Xms256m -Xmx512m | 512Mi | 1Gi |
-| rocketmq-namesrv | 1 | -Xms128m -Xmx256m | 256Mi | 384Mi |
-| mysql | 1 | — | 256Mi | 512Mi |
+| rocketmq-broker | 1 | -Xms256m -Xmx512m | 512Mi | 2Gi |
+| rocketmq-namesrv | 1 | -Xms128m -Xmx256m | 256Mi | 512Mi |
+| mysql | 1 | — | 192Mi | 384Mi |
 | redis | 1 | — | 32Mi | 128Mi |
 | seckill-user | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-activity | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
@@ -39,9 +39,9 @@
 | seckill-order | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-gateway | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-web | 1 | — | 32Mi | 128Mi |
-| **合计 limits** | | | | **~4.1 GiB** |
+| **合计 limits** | | | | **~5.1 GiB** |
 
-实际占用约 **2.5–3 GiB**，Docker 8GB 内有余量。
+实际占用约 **2.5–3.5 GiB**，Docker 8GB 内有余量。Broker 曾 OOM，limit 已提到 2Gi。
 
 ## 5. 跨机访问（同 WiFi）
 
@@ -75,7 +75,7 @@ spec:
 | 活动会场（自测抢购） | `http://localhost:30080/seckill` | 普通用户登录后默认进 |
 | 跨机访问 | `http://192.168.2.53:30080/mall` | 同 WiFi 其他机器 |
 
-代码导读见 [code-walkthrough-order.md](./code-walkthrough-order.md)。
+代码导读见 [code-walkthrough-order.md](./code-walkthrough-order.md)；并发缺口见 [risks.md](./risks.md)。
 
 ## 7. 部署命令
 

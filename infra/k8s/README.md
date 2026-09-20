@@ -1,4 +1,12 @@
-# K8s 空壳部署（第 1 步）
+# K8s 清单说明
+
+日常请用仓库根目录的本机部署，不要只跑本目录脚本：
+
+```bash
+./infra/scripts/deploy-local.sh
+```
+
+见 [docs/ci-cd.md](../ci-cd.md)、[docs/deploy-plan.md](../deploy-plan.md)。
 
 ## 前置
 

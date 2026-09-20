@@ -19,6 +19,8 @@
 入口：http://localhost:30080  
 前置：Docker Desktop 已启动且 Kubernetes Ready。
 
+并发与实现缺口：[risks.md](./risks.md)。架构：[architecture.md](./architecture.md)。
+
 ## 注意
 
 - 镜像只在本机 tag（`0.1.0`），同 tag 更新后脚本会 `rollout restart`
