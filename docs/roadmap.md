@@ -3,7 +3,7 @@
 以 [architecture.md](./architecture.md) 为准。
 
 要点：K8s 全容器（arm64 / NodePort / PVC）；共享 MySQL + **MyBatis-Plus**；JWT；单机 Docker 轻量并发（目标约 300 QPS、0 超卖）。  
-产品：注册仅 USER + 种子 ADMIN；活动状态机终态不复用；限购 1；Mock 支付；取消/超时回滚。  
+产品：注册仅 USER + 种子 ADMIN；活动状态机终态不复用；限购可配（默认 1）；Mock 支付；取消/超时回滚。  
 流程约定：每完成一步 → commit → **push 远程** → Agent 本机 `deploy-local.sh` 部署，见 [ci-cd.md](./ci-cd.md)。
 
 1. K8s 最小可部署空壳  
@@ -18,4 +18,4 @@
 10. RocketMQ 延迟关单/关抢 + 扫表兜底 + 库存对账  
 11. 用户管理（列表/创建/启停/改角色/重置密码）  
 12. 轻量压测 — 见 [test-report.md](./test-report.md)  
-13. （后置）限流、真实支付态
+13. （后置）真实支付态

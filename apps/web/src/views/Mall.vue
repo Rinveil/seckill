@@ -7,7 +7,7 @@
       </div>
       <div class="header-actions">
         <template v-if="loggedIn">
-          <el-button link type="primary" @click="$router.push(isAdmin ? '/ops/activities' : '/seckill')">进入控制台</el-button>
+          <el-button link type="primary" @click="$router.push(isAdminVal ? '/ops/activities' : '/seckill')">进入控制台</el-button>
           <el-button link @click="onLogout">退出</el-button>
         </template>
         <template v-else>
@@ -34,14 +34,14 @@
       <el-row v-else :gutter="16">
         <el-col v-for="row in pagedRows" :key="row.id" :xs="24" :sm="12" :md="8" :lg="6">
           <el-card class="goods-card" shadow="hover" :body-style="{ padding: 0 }">
-            <div class="goods-img">
+            <div class="goods-img" @click="$router.push(`/mall/${row.id}`)">
               <img src="/product.svg" alt="秒杀商品" />
               <el-tag class="status-tag" :type="statusType(row.status)" effect="dark" size="small">
                 {{ statusLabel(row.status) }}
               </el-tag>
             </div>
             <div class="goods-body">
-              <div class="goods-title" :title="row.title">{{ row.title }}</div>
+              <div class="goods-title" :title="row.title" @click="$router.push(`/mall/${row.id}`)">{{ row.title }}</div>
               <div class="price-row">
                 <span class="seckill-price">¥{{ (row.priceFen / 100).toFixed(2) }}</span>
                 <span class="origin-price">¥{{ (row.originPriceFen / 100).toFixed(2) }}</span>
@@ -148,12 +148,16 @@ function fmt(ms) {
 function applyFilter() {}
 
 function enter(row) {
-  if (!isLoggedIn()) {
-    ElMessage.info('请先登录后再抢购')
-    router.push({ path: '/login', query: { redirect: `/seckill/activity/${row.id}` } })
+  if (row.status === 'OPEN') {
+    if (!isLoggedIn()) {
+      ElMessage.info('请先登录后再抢购')
+      router.push({ path: '/login', query: { redirect: `/seckill/activity/${row.id}` } })
+      return
+    }
+    router.push(`/seckill/activity/${row.id}`)
     return
   }
-  router.push(`/seckill/activity/${row.id}`)
+  router.push(`/mall/${row.id}`)
 }
 
 function onLogout() {
@@ -214,7 +218,9 @@ onUnmounted(() => clearInterval(timer))
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 .goods-card {
   margin-bottom: 16px;
@@ -225,6 +231,7 @@ onUnmounted(() => clearInterval(timer))
   position: relative;
   height: 180px;
   background: #fff5f5;
+  cursor: pointer;
 }
 .goods-img img {
   width: 100%;
@@ -247,6 +254,7 @@ onUnmounted(() => clearInterval(timer))
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 8px;
+  cursor: pointer;
 }
 .price-row {
   display: flex;

@@ -71,7 +71,7 @@ POST /api/seckill/{activityId} (+ Authorization: Bearer)
 
 状态机：`DRAFT → PREHEATED → OPEN → CLOSED`（终态不复用）。
 
-Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `stock:init`。
+Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `limit` / `stock:init`。
 
 ---
 
@@ -82,14 +82,18 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `s
 | 路径 | 页面 | 鉴权 |
 |---|---|---|
 | `/mall` | `Mall.vue` 商城卡片 | 公开 |
+| `/mall/:id` | `MallDetail.vue` 商品详情 | 公开 |
 | `/login` `/register` | 登录/注册 | 公开 |
 | `/seckill` | `SeckillHome.vue` 会场表 | 登录 |
 | `/seckill/activity/:id` | `Activity.vue` 抢购 | 登录 |
+| `/seckill/result` | `Result.vue` 抢购结果 + 去支付 | 登录 |
+| `/my/orders` | `MyOrders.vue` 我的订单 | 登录 |
+| `/ops/dashboard` | `Dashboard.vue` 数据看板 | ADMIN |
 | `/ops/*` | 运营管理 | ADMIN |
 
 ### 4.2 商城（`Mall.vue`）
 
-卡片网格，共用静态 `/product.svg`；秒杀价 + 划线原价 + 折扣 + 倒计时；未登录可逛，点抢购跳登录。数据来自公开 `GET /api/mall/list`。
+卡片网格，共用静态 `/product.svg`；秒杀价 + 划线原价 + 折扣 + 倒计时 + 已抢进度；支持搜索/状态筛选/分页。未登录可逛；开抢中点「立即抢购」需登录后进会场，其它状态进公开详情 `/mall/:id`。数据来自公开 `GET /api/mall/list`（含 `soldCount`、`limitPerUser`）。
 
 ### 4.3 HTTP（`api.js`）
 
@@ -105,6 +109,8 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `s
 
 `JwtAuthGlobalFilter`：去伪造头 → 验 JWT → 注入 `X-User-Id/Role/Username` → 失败返 401。
 
+`RateLimitFilter`（order -110，早于 JWT）：仅 `/api/seckill/**`，按客户端 IP 令牌桶（默认 50 QPS、桶容量 10），超限 429。
+
 ---
 
 ## 6. Core：预扣 + 建单
@@ -115,7 +121,7 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `s
 3. `dispatchCreate`：mq=true→`RocketMQTemplate.syncSend`；mq=false→`OrderCreateClient.createSync`
 4. 失败→`rollback` + 抛「系统繁忙，库存已回滚」
 
-Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought`存在→-1；`stock<1`→-2；否则 DECR+SET bought。
+Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`stock<1`→-2；否则 DECR 库存 + INCR 已购计数。`limit` 来自 Redis `seckill:limit:{id}`（活动 `limitPerUser`，默认 1）。
 
 ---
 
@@ -126,9 +132,9 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought`存在→-1；`stock
 `createFromMessage`：查重→查价→`insert t_order(CREATED)`→`scheduleExpire`（MQ 延迟）→失败回滚 Redis。
 
 用户 API（`OrderController`，经网关）：
-- `GET /api/order/list` `GET /api/order/{orderNo}`
+- `GET /api/order/list` `GET /api/order/{orderNo}`（列表带 `activityTitle`）
 - `POST /api/order/{orderNo}/pay` → `PAID`（仅 CREATED 可付）
-- `POST /api/order/{orderNo}/cancel` → `CANCELLED` + Redis 回滚
+- `POST /api/order/{orderNo}/cancel` → `CANCELLED` + Redis 回滚（已购计数 -1）
 
 关单/取消/过期互斥：`closeCreatedOrder` 用 DB 条件更新 `status=CREATED`，只成功一次，避免双重回滚。
 
@@ -160,7 +166,7 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought`存在→-1；`stock
 ## 10. 并发与一致性要点
 
 1. 库存真相在 Redis；DB `stock` 是配置快照。对账：`init ≈ redis + CREATED + PAID`
-2. 限购 1：Lua `bought` 键
+2. 限购：Lua `bought` 计数 vs `limit` 键；取消/超时 DECR 已购，同用户可再抢
 3. 预扣成功但建单失败：core/order 都会回滚 Redis
 4. 支付 vs 过期：靠 `CREATED` 条件更新互斥
 5. 活动手动关 vs 到期关：到期时若已非 OPEN 则跳过；扫表 + 延迟消息双保险

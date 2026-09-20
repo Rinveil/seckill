@@ -33,6 +33,7 @@
             <div><span>状态</span><el-tag :type="statusType" size="small">{{ statusText }}</el-tag></div>
             <div><span>库存</span><strong>{{ item?.stock }} 件</strong></div>
             <div v-if="item?.soldCount != null"><span>已抢</span><strong>{{ item.soldCount }} 件</strong></div>
+            <div><span>限购</span><strong>每人 {{ item?.limitPerUser || 1 }} 件</strong></div>
             <div><span>开始</span><strong>{{ formatTime(item?.startAt) }}</strong></div>
             <div><span>结束</span><strong>{{ formatTime(item?.endAt) }}</strong></div>
           </div>

@@ -25,7 +25,7 @@
       <el-table-column label="支付截止" min-width="160">
         <template #default="{ row }">{{ formatTime(row.expireAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="180">
         <template #default="{ row }">
           <el-button link type="success" :disabled="!canPayOrCancel(row)" @click="openPay(row)">支付</el-button>
           <el-button link type="danger" :disabled="!canPayOrCancel(row)" @click="onCancel(row)">取消</el-button>
@@ -60,7 +60,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { cancelOrder, getOrders, payOrder } from '../api'
+import { cancelOrder, getOrders, getUser, payOrder } from '../api'
 
 const loading = ref(false)
 const rows = ref([])
@@ -97,7 +97,8 @@ async function load() {
   try {
     const res = await getOrders()
     if (res.code !== 0) { ElMessage.error(res.message || '加载失败'); return }
-    rows.value = res.data || []
+    const mine = getUser()?.userId
+    rows.value = (res.data || []).filter((o) => o.userId === mine)
   } finally { loading.value = false }
 }
 

@@ -22,7 +22,7 @@
           <template v-else>
             <div class="actions">
               <el-button type="primary" @click="$router.push('/mall')">返回商城</el-button>
-              <el-button v-if="isAdmin" @click="$router.push('/ops/activities')">活动管理</el-button>
+              <el-button v-if="isAdminVal" @click="$router.push('/ops/activities')">活动管理</el-button>
             </div>
           </template>
         </template>
@@ -67,7 +67,7 @@ const urgent = computed(() => {
   if (!expireAt.value) return false
   return Date.parse(expireAt.value) - now.value < 60000
 })
-const canPay = computed(() => status.value === 'CREATED' && !urgent.value === false ? true : status.value === 'CREATED')
+const canPay = computed(() => status.value === 'CREATED')
 
 async function loadOrder() {
   if (!orderToken.value) return

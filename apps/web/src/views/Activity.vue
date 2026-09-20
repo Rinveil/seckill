@@ -16,6 +16,7 @@
           <span class="origin-price">¥{{ (item?.originPriceFen / 100 || 0).toFixed(2) }}</span>
           <el-tag size="small" type="danger" effect="plain">{{ discount }}折</el-tag>
         </div>
+        <div class="limit-hint">每人限购 {{ item?.limitPerUser || 1 }} 件</div>
         <div class="stock-bar" v-if="item?.redisStock != null && item?.stock != null">
           <div class="stock-label">
             <span>已抢 {{ soldCount }} 件 / 共 {{ item.stock }} 件</span>
@@ -150,7 +151,14 @@ async function onGrab() {
   loading.value = true
   try {
     const data = await grab(route.params.id)
-    router.push({ path: '/seckill/result', query: { ok: data.code === 0 ? '1' : '0', msg: data.message || '', token: data.data?.orderNo || '' } })
+    router.push({
+      path: '/seckill/result',
+      query: {
+        ok: data.code === 0 ? '1' : '0',
+        msg: data.message || '',
+        token: data.data?.orderToken || data.data?.orderNo || ''
+      }
+    })
   } finally { loading.value = false }
 }
 </script>
@@ -166,6 +174,7 @@ async function onGrab() {
 .seckill-price { font-size: 28px; font-weight: 700; color: #ff4d4f; }
 .origin-price { font-size: 15px; color: #bbb; text-decoration: line-through; }
 .stock-bar { margin-bottom: 16px; }
+.limit-hint { font-size: 13px; color: #909399; margin-bottom: 12px; }
 .stock-label { display: flex; justify-content: space-between; font-size: 13px; color: #909399; margin-bottom: 6px; }
 .remain { color: #ff4d4f; font-weight: 600; }
 .countdown-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; font-size: 15px; }

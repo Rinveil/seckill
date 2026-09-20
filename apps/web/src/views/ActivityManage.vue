@@ -35,7 +35,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="460" fixed="right">
+      <el-table-column label="操作" min-width="360">
         <template #default="{ row }">
           <el-tooltip :content="tipEdit(row)" :disabled="!tipEdit(row)">
             <span class="act">
@@ -504,6 +504,7 @@ function onClone(row) {
   form.priceYuan = Number(((row.priceFen || 0) / 100).toFixed(2))
   form.originYuan = Number(((row.originPriceFen || 0) / 100).toFixed(2))
   form.stock = row.stock
+  form.limitPerUser = row.limitPerUser || 1
   form.startAt = new Date(Date.now() + 60_000)
   form.endAt = new Date(Date.now() + 3600_000)
   formVisible.value = true

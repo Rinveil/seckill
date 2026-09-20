@@ -14,7 +14,7 @@
 | 数据 | 共享 **一个 MySQL**；中间件 **PVC 持久化**；业务库访问统一 **MyBatis-Plus** |
 | 鉴权 | **JWT**（网关本地验签）；Redis **不做** Session |
 | Redis | 库存预扣、已购标记；B 端改库存 **直接改 Redis** |
-| 后置 | 限流、压测 |
+| 后置 | 压测（限流已落地：网关 `/api/seckill/**` IP 令牌桶） |
 
 ## 2. 产品约定（账号 / 活动 / 订单）
 
@@ -36,7 +36,7 @@
 |---|---|
 | 状态机 | **DRAFT → PREHEATED → OPEN → CLOSED**；CLOSED 为**终态**，同活动不可再开，须**新建活动** |
 | 改库存 | 仅 **PREHEATED** 允许 B 端直接改 Redis；OPEN/CLOSED 禁止 |
-| 限购 | 每用户每活动 **1 件** |
+| 限购 | 每用户每活动 **可配** `limitPerUser`（默认 1） |
 
 ### 2.3 订单 / 支付 / 失败
 
@@ -63,11 +63,11 @@
 
 | 模块 | 职责 |
 |---|---|
-| `apps/web` | 登录注册、活动/订单/用户管理、预热、自测抢购、Mock 支付 |
-| `seckill-gateway` | 路由、CORS、JWT 校验与用户透传 |
+| `apps/web` | 登录注册、商城浏览、活动/订单/用户管理、数据看板、预热、自测抢购、Mock 支付 |
+| `seckill-gateway` | 路由、CORS、JWT 校验与用户透传、抢购 IP 限流 |
 | `seckill-user` | 注册(USER)、登录、种子 ADMIN、`/me`、**用户管理（ADMIN）**、签发 JWT |
-| `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账 |
-| `seckill-core` | Redis Lua 预扣（限 1）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
+| `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账；商城公开接口 |
+| `seckill-core` | Redis Lua 预扣（`limitPerUser`）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
 | `seckill-order` | MQ/同步幂等建单；Mock 支付；超时关单（MQ 延迟或扫表，均可开关）；取消回滚 |
 | `infra` | K8s（NodePort、PVC、arm64 镜像） |
 
