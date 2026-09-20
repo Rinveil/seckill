@@ -26,7 +26,10 @@ public class StockLuaExecutor {
                         if redis.call('GET', KEYS[3]) ~= '1' then
                           return -3
                         end
-                        if redis.call('EXISTS', KEYS[2]) == 1 then
+                        local bought = tonumber(redis.call('GET', KEYS[2]) or '0')
+                        local limit = tonumber(redis.call('GET', KEYS[4]) or '1')
+                        if limit == nil or limit < 1 then limit = 1 end
+                        if bought >= limit then
                           return -1
                         end
                         local stock = tonumber(redis.call('GET', KEYS[1]) or '-1')
@@ -34,7 +37,7 @@ public class StockLuaExecutor {
                           return -2
                         end
                         redis.call('DECR', KEYS[1])
-                        redis.call('SET', KEYS[2], '1')
+                        redis.call('INCR', KEYS[2])
                         return stock - 1
                         """
         );
@@ -50,7 +53,8 @@ public class StockLuaExecutor {
         List<String> keys = Arrays.asList(
                 SeckillRedisKeys.stock(activityId),
                 SeckillRedisKeys.bought(activityId, userId),
-                SeckillRedisKeys.open(activityId)
+                SeckillRedisKeys.open(activityId),
+                SeckillRedisKeys.limit(activityId)
         );
         Long result = stringRedisTemplate.execute(DEDUCT_SCRIPT, keys);
         return result == null ? -2L : result;

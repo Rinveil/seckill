@@ -103,6 +103,7 @@ public class ActivityService {
         entity.setStatus(Activity.STATUS_DRAFT);
         entity.setStartAt(toLocal(request.startAt()));
         entity.setEndAt(toLocal(request.endAt()));
+        entity.setLimitPerUser(request.limitPerUser() == null || request.limitPerUser() < 1 ? 1 : request.limitPerUser());
         activityMapper.insert(entity);
         return toView(entity);
     }
@@ -129,6 +130,7 @@ public class ActivityService {
         entity.setStock(request.stock());
         entity.setStartAt(toLocal(request.startAt()));
         entity.setEndAt(toLocal(request.endAt()));
+        entity.setLimitPerUser(request.limitPerUser() == null || request.limitPerUser() < 1 ? 1 : request.limitPerUser());
         activityMapper.updateById(entity);
         return toView(entity);
     }
@@ -309,6 +311,8 @@ public class ActivityService {
         String stockVal = String.valueOf(entity.getStock());
         stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stock(id), stockVal);
         stringRedisTemplate.opsForValue().set(SeckillRedisKeys.stockInit(id), stockVal);
+        int limit = entity.getLimitPerUser() == null || entity.getLimitPerUser() < 1 ? 1 : entity.getLimitPerUser();
+        stringRedisTemplate.opsForValue().set(SeckillRedisKeys.limit(id), String.valueOf(limit));
         entity.setStatus(Activity.STATUS_PREHEATED);
         activityMapper.updateById(entity);
         return toView(entity);
@@ -376,9 +380,10 @@ public class ActivityService {
         if (!Objects.equals(entity.getPriceFen(), request.priceFen())
                 || !Objects.equals(entity.getOriginPriceFen(), request.originPriceFen())
                 || !Objects.equals(entity.getStock(), request.stock())
+                || !Objects.equals(entity.getLimitPerUser(), request.limitPerUser())
                 || !sameWallTime(entity.getStartAt(), request.startAt())
                 || !sameWallTime(entity.getEndAt(), request.endAt())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "开抢中仅允许修改标题，价格/库存/时间不可改");
+            throw new BusinessException(ResultCode.BAD_REQUEST, "开抢中仅允许修改标题，价格/库存/限购/时间不可改");
         }
     }
 
@@ -399,20 +404,29 @@ public class ActivityService {
                 readRedisStock(entity.getId()),
                 statusName(statusOf(entity)),
                 toInstant(entity.getStartAt()),
-                toInstant(entity.getEndAt())
+                toInstant(entity.getEndAt()),
+                entity.getLimitPerUser() == null ? 1 : entity.getLimitPerUser()
         );
     }
 
     private MallView toMallView(Activity entity) {
+        Integer redisStock = readRedisStock(entity.getId());
+        Integer initStock = readInt(SeckillRedisKeys.stockInit(entity.getId()));
+        Integer soldCount = null;
+        if (initStock != null && redisStock != null) {
+            soldCount = Math.max(0, initStock - redisStock);
+        }
         return new MallView(
                 entity.getId(),
                 entity.getTitle(),
                 entity.getPriceFen(),
                 entity.getOriginPriceFen(),
                 entity.getStock() == null ? 0 : entity.getStock(),
+                soldCount,
                 statusName(statusOf(entity)),
                 toInstant(entity.getStartAt()),
-                toInstant(entity.getEndAt())
+                toInstant(entity.getEndAt()),
+                entity.getLimitPerUser() == null ? 1 : entity.getLimitPerUser()
         );
     }
 

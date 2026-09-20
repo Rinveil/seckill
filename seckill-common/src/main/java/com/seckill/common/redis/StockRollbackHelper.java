@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * 与 core 预扣对称的回滚：清已购 + 库存 +1。
+ * 与 core 预扣对称的回滚：已购 -1 + 库存 +1。
  * 返回 1=已回滚，0=无需回滚。
  */
 public final class StockRollbackHelper {
@@ -18,8 +18,9 @@ public final class StockRollbackHelper {
         ROLLBACK_SCRIPT.setResultType(Long.class);
         ROLLBACK_SCRIPT.setScriptText(
                 """
-                        if redis.call('EXISTS', KEYS[2]) == 1 then
-                          redis.call('DEL', KEYS[2])
+                        local bought = tonumber(redis.call('GET', KEYS[2]) or '0')
+                        if bought > 0 then
+                          redis.call('DECR', KEYS[2])
                           redis.call('INCR', KEYS[1])
                           return 1
                         end

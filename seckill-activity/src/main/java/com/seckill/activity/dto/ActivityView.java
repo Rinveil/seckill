@@ -11,6 +11,7 @@ public record ActivityView(
         Integer redisStock,
         String status,
         Instant startAt,
-        Instant endAt
+        Instant endAt,
+        int limitPerUser
 ) {
 }

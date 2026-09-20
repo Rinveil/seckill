@@ -36,4 +36,6 @@ public class Activity {
     private LocalDateTime startAt;
     @TableField("end_at")
     private LocalDateTime endAt;
+    @TableField("limit_per_user")
+    private Integer limitPerUser;
 }

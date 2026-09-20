@@ -10,7 +10,7 @@
       </div>
     </template>
 
-    <el-table :data="rows" stripe empty-text="暂无活动">
+    <el-table :data="pagedRows" stripe empty-text="暂无活动">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="title" label="标题" min-width="140" />
       <el-table-column label="秒杀价" width="100">
@@ -79,6 +79,7 @@
             </span>
           </el-tooltip>
           <el-button link type="primary" @click="onReconcile(row)">对账</el-button>
+          <el-button link type="primary" @click="onClone(row)">克隆</el-button>
           <el-tooltip :content="tipDelete(row)" :disabled="!tipDelete(row)">
             <span class="act">
               <el-button link type="danger" :disabled="row.status === 'OPEN'" @click="onDelete(row)">
@@ -144,9 +145,11 @@
           :disabled="editingOpen"
         />
       </el-form-item>
+      <el-form-item label="限购数量">
+        <el-input-number v-model="form.limitPerUser" :min="1" :max="99" :disabled="editingOpen" />
+        <span class="field-tip">每用户限购件数（默认 1）</span>
+      </el-form-item>
     </el-form>
-    <template #footer>
-      <el-button @click="formVisible = false">取消</el-button>
       <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
     </template>
   </el-dialog>
@@ -162,6 +165,14 @@
       <el-button type="primary" :loading="saving" @click="onSaveRedisStock">确定</el-button>
     </template>
   </el-dialog>
+  <el-pagination
+    v-if="rows.length > pageSize"
+    style="margin-top: 16px; justify-content: flex-end; display: flex"
+    v-model:current-page="currentPage"
+    :page-size="pageSize"
+    :total="rows.length"
+    layout="prev, pager, next, total"
+  />
 </template>
 
 <script setup>
@@ -182,6 +193,9 @@ import {
 const loading = ref(false)
 const saving = ref(false)
 const rows = ref([])
+const currentPage = ref(1)
+const pageSize = 10
+const pagedRows = computed(() => rows.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize))
 const formVisible = ref(false)
 const redisVisible = ref(false)
 const editingId = ref(null)
@@ -234,7 +248,8 @@ const form = reactive({
   originYuan: 399,
   stock: 100,
   startAt: null,
-  endAt: null
+  endAt: null,
+  limitPerUser: 1
 })
 
 const formRules = {
@@ -308,6 +323,7 @@ function resetForm() {
   form.priceYuan = 99
   form.originYuan = 399
   form.stock = 100
+  form.limitPerUser = 1
   form.startAt = new Date(now + 60_000)
   form.endAt = new Date(now + 3600_000)
 }
@@ -330,6 +346,7 @@ function openEdit(row) {
   form.priceYuan = Number(((row.priceFen || 0) / 100).toFixed(2))
   form.originYuan = Number(((row.originPriceFen || 0) / 100).toFixed(2))
   form.stock = row.stock
+  form.limitPerUser = row.limitPerUser || 1
   form.startAt = row.startAt ? new Date(row.startAt) : null
   form.endAt = row.endAt ? new Date(row.endAt) : null
   formVisible.value = true
@@ -342,7 +359,8 @@ function toPayload() {
     originPriceFen: yuanToFen(form.originYuan),
     stock: form.stock,
     startAt: toIso(form.startAt),
-    endAt: toIso(form.endAt)
+    endAt: toIso(form.endAt),
+    limitPerUser: form.limitPerUser || 1
   }
 }
 
@@ -476,6 +494,19 @@ async function onSaveRedisStock() {
 }
 
 onMounted(load)
+
+function onClone(row) {
+  editingId.value = null
+  editingOpen.value = false
+  form.title = row.title + ' (副本)'
+  form.priceYuan = Number(((row.priceFen || 0) / 100).toFixed(2))
+  form.originYuan = Number(((row.originPriceFen || 0) / 100).toFixed(2))
+  form.stock = row.stock
+  form.startAt = new Date(Date.now() + 60_000)
+  form.endAt = new Date(Date.now() + 3600_000)
+  formVisible.value = true
+  ElMessage.info('已复制活动配置，请修改时间后保存')
+}
 </script>
 
 <style scoped>

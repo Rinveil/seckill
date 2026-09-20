@@ -280,6 +280,15 @@ public class OrderService {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    private String loadActivityTitle(long activityId) {
+        List<String> rows = jdbcTemplate.query(
+                "SELECT title FROM t_activity WHERE id = ?",
+                (rs, rowNum) -> rs.getString("title"),
+                activityId
+        );
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     private OrderView toView(SeckillOrder order) {
         Instant createdAt = order.getCreatedAt() == null
                 ? null
@@ -291,6 +300,7 @@ public class OrderService {
                 order.getOrderNo(),
                 order.getUserId(),
                 order.getActivityId(),
+                loadActivityTitle(order.getActivityId()),
                 order.getStatus(),
                 order.getAmountFen(),
                 createdAt,

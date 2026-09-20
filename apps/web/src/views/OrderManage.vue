@@ -9,9 +9,20 @@
         <el-button :loading="loading" @click="load">刷新</el-button>
       </div>
     </template>
-    <el-table :data="rows" v-loading="loading" empty-text="暂无订单" stripe>
+    <div style="margin-bottom: 12px; display: flex; gap: 12px; align-items: center;">
+      <el-select v-model="statusFilter" placeholder="状态筛选" clearable size="small" style="width: 140px">
+        <el-option label="待支付" value="CREATED" />
+        <el-option label="已支付" value="PAID" />
+        <el-option label="已取消" value="CANCELLED" />
+        <el-option label="已超时" value="EXPIRED" />
+      </el-select>
+      <el-button :loading="loading" size="small" @click="load">刷新</el-button>
+    </div>
+    <el-table :data="pagedRows" v-loading="loading" empty-text="暂无订单" stripe>
       <el-table-column prop="orderNo" label="订单号" min-width="200" />
-      <el-table-column prop="activityId" label="活动 ID" width="100" />
+      <el-table-column label="商品" min-width="140">
+        <template #default="{ row }">{{ row.activityTitle || `活动${row.activityId}` }}</template>
+      </el-table-column>
       <el-table-column prop="userId" label="用户" width="90" />
       <el-table-column label="状态" width="110">
         <template #default="{ row }">
@@ -49,16 +60,34 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="filteredRows.length > pageSize"
+      style="margin-top: 16px; justify-content: flex-end; display: flex"
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="filteredRows.length"
+      layout="prev, pager, next, total"
+    />
   </el-card>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { cancelOrder, getOrders, payOrder } from '../api'
 
 const loading = ref(false)
 const rows = ref([])
+const statusFilter = ref('')
+const currentPage = ref(1)
+const pageSize = 10
+
+const filteredRows = computed(() =>
+  statusFilter.value ? rows.value.filter(r => r.status === statusFilter.value) : rows.value
+)
+const pagedRows = computed(() =>
+  filteredRows.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize)
+)
 
 function statusLabel(status) {
   if (status === 'PAID') return '已支付'

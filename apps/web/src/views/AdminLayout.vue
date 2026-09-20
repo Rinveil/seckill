@@ -7,12 +7,14 @@
       </div>
       <el-menu :default-active="active" router>
         <el-menu-item-group v-if="admin" title="运营区">
+          <el-menu-item index="/ops/dashboard">数据看板</el-menu-item>
           <el-menu-item index="/ops/activities">活动管理</el-menu-item>
           <el-menu-item index="/ops/orders">订单管理</el-menu-item>
           <el-menu-item index="/ops/users">用户管理</el-menu-item>
         </el-menu-item-group>
         <el-menu-item-group title="自测抢购">
           <el-menu-item index="/seckill">活动会场</el-menu-item>
+          <el-menu-item index="/my/orders">我的订单</el-menu-item>
         </el-menu-item-group>
         <el-menu-item-group title="浏览">
           <el-menu-item index="/mall">商城首页</el-menu-item>
@@ -44,9 +46,11 @@ const router = useRouter()
 const user = computed(() => getUser())
 const admin = computed(() => isAdmin())
 const active = computed(() => {
+  if (route.path.startsWith('/ops/dashboard')) return '/ops/dashboard'
   if (route.path.startsWith('/ops/orders')) return '/ops/orders'
   if (route.path.startsWith('/ops/users')) return '/ops/users'
   if (route.path.startsWith('/ops/activities')) return '/ops/activities'
+  if (route.path.startsWith('/my/orders')) return '/my/orders'
   if (route.path.startsWith('/seckill')) return '/seckill'
   return route.path
 })

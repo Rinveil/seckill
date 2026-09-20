@@ -15,6 +15,7 @@ public record ActivityCreateRequest(
         @NotNull(message = "原价不能为空") @Min(value = 1, message = "原价须大于 0（单位：分）") Integer originPriceFen,
         @NotNull(message = "配置库存不能为空") @Min(value = 0, message = "配置库存不能为负数") Integer stock,
         @NotNull(message = "开始时间不能为空") Instant startAt,
-        @NotNull(message = "结束时间不能为空") Instant endAt
+        @NotNull(message = "结束时间不能为空") Instant endAt,
+        @Min(value = 1, message = "限购数量须大于等于 1") Integer limitPerUser
 ) {
 }

@@ -10,7 +10,7 @@
       </div>
     </template>
     <el-empty v-if="!rows.length" description="暂无可参与活动，请管理员预热并开抢" />
-    <el-table v-else :data="rows" stripe>
+    <el-table v-else :data="pagedRows" stripe>
       <el-table-column prop="title" label="活动" min-width="180" />
       <el-table-column label="秒杀价" width="110">
         <template #default="{ row }">
@@ -46,16 +46,27 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="rows.length > pageSize"
+      style="margin-top: 16px; justify-content: flex-end; display: flex"
+      v-model:current-page="currentPage"
+      :page-size="pageSize"
+      :total="rows.length"
+      layout="prev, pager, next, total"
+    />
   </el-card>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getActivities } from '../api'
 
 const loading = ref(false)
 const rows = ref([])
+const currentPage = ref(1)
+const pageSize = 10
+const pagedRows = computed(() => rows.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize))
 
 function statusLabel(status) {
   if (status === 'OPEN') return '开抢中'

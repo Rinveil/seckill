@@ -19,7 +19,8 @@
 
     <main class="mall-main" v-loading="loading">
       <div class="filter-bar">
-        <el-radio-group v-model="filter" size="small" @change="applyFilter">
+        <el-input v-model="keyword" placeholder="搜索商品" clearable size="small" style="width: 200px" />
+        <el-radio-group v-model="filter" size="small">
           <el-radio-button label="">全部</el-radio-button>
           <el-radio-button label="OPEN">开抢中</el-radio-button>
           <el-radio-button label="PREHEATED">即将开始</el-radio-button>
@@ -31,7 +32,7 @@
       <el-empty v-if="!filtered.length" description="暂无活动" />
 
       <el-row v-else :gutter="16">
-        <el-col v-for="row in filtered" :key="row.id" :xs="24" :sm="12" :md="8" :lg="6">
+        <el-col v-for="row in pagedRows" :key="row.id" :xs="24" :sm="12" :md="8" :lg="6">
           <el-card class="goods-card" shadow="hover" :body-style="{ padding: 0 }">
             <div class="goods-img">
               <img src="/product.svg" alt="秒杀商品" />
@@ -49,6 +50,10 @@
                 </el-tag>
               </div>
               <div class="countdown">{{ countdownText(row) }}</div>
+              <div class="sold-bar" v-if="row.soldCount != null && row.stock">
+                <span class="sold-text">已抢 {{ row.soldCount }} 件</span>
+                <el-progress :percentage="Math.min(100, Math.round(row.soldCount / row.stock * 100))" :color="'#ff4d4f'" :show-text="false" :stroke-width="8" />
+              </div>
               <el-button
                 type="primary"
                 class="enter-btn"
@@ -61,6 +66,14 @@
           </el-card>
         </el-col>
       </el-row>
+      <el-pagination
+        v-if="filtered.length > pageSize"
+        style="margin-top: 20px; justify-content: center; display: flex"
+        v-model:current-page="currentPage"
+        :page-size="pageSize"
+        :total="filtered.length"
+        layout="prev, pager, next, total"
+      />
     </main>
   </div>
 </template>
@@ -75,13 +88,24 @@ const router = useRouter()
 const loading = ref(false)
 const rows = ref([])
 const filter = ref('')
+const keyword = ref('')
+const currentPage = ref(1)
+const pageSize = 8
 const now = ref(Date.now())
 const loggedIn = computed(() => isLoggedIn())
 const isAdminVal = computed(() => isAdmin())
 let timer
 
-const filtered = computed(() =>
-  filter.value ? rows.value.filter((r) => r.status === filter.value) : rows.value
+const filtered = computed(() => {
+  let list = filter.value ? rows.value.filter((r) => r.status === filter.value) : rows.value
+  if (keyword.value.trim()) {
+    const kw = keyword.value.trim().toLowerCase()
+    list = list.filter((r) => r.title.toLowerCase().includes(kw))
+  }
+  return list
+})
+const pagedRows = computed(() =>
+  filtered.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize)
 )
 
 function statusLabel(s) {
@@ -249,6 +273,8 @@ onUnmounted(() => clearInterval(timer))
   margin-bottom: 10px;
   min-height: 18px;
 }
+.sold-bar { margin-bottom: 10px; }
+.sold-text { font-size: 11px; color: #ff7a45; display: block; margin-bottom: 3px; }
 .enter-btn {
   width: 100%;
 }
