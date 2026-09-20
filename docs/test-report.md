@@ -1,5 +1,6 @@
 # 秒杀系统测试报告
 
+> **已归档，以后不再压测。** 本文是既有一版结果，仅作查阅。  
 > 测试时间：2026-09-13 22:44 ~ 23:02（CST）  
 > 入口：`http://localhost:30080`（NodePort）  
 > 脚本：`infra/scripts/e2e-smoke.py`、`infra/scripts/load-test.py`  

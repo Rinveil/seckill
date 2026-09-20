@@ -22,4 +22,4 @@
 ## 注意
 
 - 镜像只在本机 tag（`0.1.0`），同 tag 更新后脚本会 `rollout restart`
-- **压测**仍需人工确认
+- **压测已结束**：不再跑压测；历史报告见 [test-report.md](./test-report.md)

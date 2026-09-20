@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Controlled concurrency load test for POST /api/seckill/{activityId}.
+"""Archived. Do not run load tests anymore; results are in docs/test-report.md.
+
+Controlled concurrency load test for POST /api/seckill/{activityId}.
 
 Scenarios:
   prepare  — create activity + register users + write tokens file

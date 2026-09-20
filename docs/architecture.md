@@ -2,7 +2,7 @@
 
 > 演示目标：在 Mac（**Apple Silicon / arm64**）用 **Docker Desktop Kubernetes** 部署全栈（前端 + 全部 Java + 中间件均在容器内），通过 **唯一 B 端（Vue3 + Element Plus）** 自测。  
 > 不以本机 IntelliJ 启动 `*Application` 为运行方式。密钥只走环境变量 / K8s Secret。  
-> **优先把项目跑通**；网关限流、压测后置。
+> **优先把项目跑通**。网关限流已落地；压测已归档（见 [test-report.md](./test-report.md)），以后不再做。
 
 ## 1. 已确认决策
 
@@ -14,7 +14,7 @@
 | 数据 | 共享 **一个 MySQL**；中间件 **PVC 持久化**；业务库访问统一 **MyBatis-Plus** |
 | 鉴权 | **JWT**（网关本地验签）；Redis **不做** Session |
 | Redis | 库存预扣、已购标记；B 端改库存 **直接改 Redis** |
-| 后置 | 压测（限流已落地：网关 `/api/seckill/**` IP 令牌桶） |
+| 后置 | 真实支付态（限流已落地；压测已归档） |
 
 ## 2. 产品约定（账号 / 活动 / 订单）
 
@@ -131,5 +131,5 @@
 9. 活动状态机 DRAFT→PREHEATED→OPEN→CLOSED（终态不复用）  
 10. RocketMQ 延迟关单/关抢 + 扫表兜底 + 库存对账  
 11. 用户管理（列表/创建/启停/改角色/重置密码）  
-12. 轻量压测（~300 QPS / 0 超卖）— 结果见 [test-report.md](./test-report.md)  
-13. （后置）限流、真实支付态
+12. 轻量压测（已完成并归档，以后不再做）— [test-report.md](./test-report.md)  
+13. （后置）真实支付态
