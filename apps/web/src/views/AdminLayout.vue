@@ -12,8 +12,8 @@
           <el-menu-item index="/ops/orders">订单管理</el-menu-item>
           <el-menu-item index="/ops/users">用户管理</el-menu-item>
         </el-menu-item-group>
-        <el-menu-item-group title="自测抢购">
-          <el-menu-item index="/seckill">活动会场</el-menu-item>
+        <el-menu-item-group title="购物">
+          <el-menu-item index="/seckill">秒杀会场</el-menu-item>
           <el-menu-item index="/my/orders">我的订单</el-menu-item>
         </el-menu-item-group>
         <el-menu-item-group title="浏览">

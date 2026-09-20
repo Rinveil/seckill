@@ -1,39 +1,66 @@
 <template>
-  <div class="auth-page">
-    <div class="auth-shell">
-      <div class="auth-brand">
-        <div class="mark">石</div>
-        <h1>石头商城</h1>
-        <p>运营与自测抢购工作台</p>
-      </div>
-      <el-card class="auth-card" shadow="never">
-        <h2>登录账号</h2>
-        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
-          <el-form-item label="用户名" prop="username">
-            <el-input v-model="form.username" autocomplete="username" placeholder="请输入用户名" size="large" />
-          </el-form-item>
-          <el-form-item label="密码" prop="password">
-            <el-input
-              v-model="form.password"
-              type="password"
-              show-password
-              autocomplete="current-password"
-              placeholder="请输入密码"
+  <div class="shop-auth">
+    <header class="shop-auth-top">
+      <router-link to="/mall" class="shop-auth-logo">石头商城</router-link>
+      <span class="shop-auth-welcome">欢迎登录</span>
+    </header>
+    <main class="shop-auth-banner">
+      <div class="shop-auth-inner">
+        <div class="shop-auth-promo">
+          <img src="/product.svg" alt="" />
+          <div class="shop-auth-promo-copy">
+            <div class="kicker">限时秒杀</div>
+            <div class="title">好货低价 准时开抢</div>
+          </div>
+        </div>
+        <div class="shop-auth-box">
+          <div class="shop-auth-tab">密码登录</div>
+          <el-form
+            ref="formRef"
+            :model="form"
+            :rules="rules"
+            hide-required-asterisk
+            @submit.prevent
+          >
+            <el-form-item prop="username">
+              <el-input
+                v-model="form.username"
+                autocomplete="username"
+                placeholder="用户名"
+                size="large"
+                @keyup.enter="onSubmit"
+              />
+            </el-form-item>
+            <el-form-item prop="password">
+              <el-input
+                v-model="form.password"
+                type="password"
+                show-password
+                autocomplete="current-password"
+                placeholder="密码"
+                size="large"
+                @keyup.enter="onSubmit"
+              />
+            </el-form-item>
+            <el-button
+              class="shop-auth-submit"
+              type="primary"
               size="large"
-              @keyup.enter="onSubmit"
-            />
-          </el-form-item>
-          <el-button type="primary" size="large" :loading="loading" style="width: 100%" @click="onSubmit">
-            进入石头商城
-          </el-button>
-        </el-form>
-        <p class="auth-tip">
-          演示管理员 admin / admin123<br />
-          <router-link to="/register">注册普通用户</router-link>
-          · <router-link to="/mall">先逛商城</router-link>
-        </p>
-      </el-card>
-    </div>
+              :loading="loading"
+              native-type="button"
+              @click="onSubmit"
+            >
+              登录
+            </el-button>
+          </el-form>
+          <div class="shop-auth-links">
+            <router-link to="/register">免费注册</router-link>
+            <router-link to="/mall">返回商城</router-link>
+          </div>
+        </div>
+      </div>
+    </main>
+    <footer class="shop-auth-foot">石头商城</footer>
   </div>
 </template>
 
@@ -50,8 +77,8 @@ const formRef = ref()
 const form = reactive({ username: '', password: '' })
 
 const rules = {
-  username: [{ required: true, message: '用户名不能为空', trigger: 'blur' }],
-  password: [{ required: true, message: '密码不能为空', trigger: 'blur' }]
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
 function safeRedirect(role) {
@@ -77,7 +104,6 @@ async function onSubmit() {
       return
     }
     setAuth(res.data)
-    ElMessage.success('欢迎回来')
     router.replace(safeRedirect(res.data.role))
   } finally {
     loading.value = false
