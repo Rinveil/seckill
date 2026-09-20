@@ -12,6 +12,7 @@ import com.seckill.common.config.SeckillFeatureProperties;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.mq.ActivityExpireMessage;
 import com.seckill.common.mq.ActivityMqConstants;
+import com.seckill.common.redis.ActivityBloomFilter;
 import com.seckill.common.redis.SeckillRedisKeys;
 import com.seckill.common.result.ResultCode;
 import org.apache.rocketmq.client.producer.SendResult;
@@ -48,19 +49,22 @@ public class ActivityService {
     private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
     private final JdbcTemplate jdbcTemplate;
     private final SeckillFeatureProperties featureProperties;
+    private final ActivityBloomFilter activityBloomFilter;
 
     public ActivityService(
             ActivityMapper activityMapper,
             StringRedisTemplate stringRedisTemplate,
             ObjectProvider<RocketMQTemplate> rocketMQTemplate,
             JdbcTemplate jdbcTemplate,
-            SeckillFeatureProperties featureProperties
+            SeckillFeatureProperties featureProperties,
+            ActivityBloomFilter activityBloomFilter
     ) {
         this.activityMapper = activityMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.rocketMQTemplate = rocketMQTemplate;
         this.jdbcTemplate = jdbcTemplate;
         this.featureProperties = featureProperties;
+        this.activityBloomFilter = activityBloomFilter;
     }
 
     public List<ActivityView> list() {
@@ -167,6 +171,7 @@ public class ActivityService {
         entity.setStatus(Activity.STATUS_OPEN);
         activityMapper.updateById(entity);
         stringRedisTemplate.opsForValue().set(SeckillRedisKeys.open(id), "1");
+        refreshBloom();
         scheduleExpire(id, Duration.between(now, entity.getEndAt()).toMillis());
         return toView(entity);
     }
@@ -270,7 +275,24 @@ public class ActivityService {
         entity.setStatus(Activity.STATUS_CLOSED);
         activityMapper.updateById(entity);
         stringRedisTemplate.delete(SeckillRedisKeys.open(entity.getId()));
+        refreshBloom();
         return toView(entity);
+    }
+
+    private void refreshBloom() {
+        try {
+            activityBloomFilter.rebuild(listOpenIds());
+        } catch (RuntimeException ex) {
+            log.warn("refresh activity bloom failed, core will fail-open to Lua", ex);
+        }
+    }
+
+    private List<Long> listOpenIds() {
+        return activityMapper.selectList(
+                new LambdaQueryWrapper<Activity>()
+                        .eq(Activity::getStatus, Activity.STATUS_OPEN)
+                        .select(Activity::getId)
+        ).stream().map(Activity::getId).filter(Objects::nonNull).toList();
     }
 
     private void scheduleExpire(long activityId, long delayMs) {

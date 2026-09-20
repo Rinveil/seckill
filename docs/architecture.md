@@ -13,7 +13,7 @@
 | 入口 | **NodePort** + localhost |
 | 数据 | 共享 **一个 MySQL**；中间件 **PVC 持久化**；业务库访问统一 **MyBatis-Plus** |
 | 鉴权 | **JWT**（网关本地验签）；Redis **不做** Session |
-| Redis | 库存预扣、已购标记；B 端改库存 **直接改 Redis** |
+| Redis | 库存预扣、已购标记、开抢活动布隆（防 ID 穿透）；B 端改库存 **直接改 Redis** |
 | 后置 | 真实支付态（限流已落地；压测已归档） |
 
 ## 2. 产品约定（账号 / 活动 / 订单）
@@ -67,7 +67,7 @@
 | `seckill-gateway` | 路由、CORS、JWT 校验与用户透传、抢购 IP 限流 |
 | `seckill-user` | 注册(USER)、登录、种子 ADMIN、`/me`、**用户管理（ADMIN）**、签发 JWT |
 | `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账；商城公开接口 |
-| `seckill-core` | Redis Lua 预扣（`limitPerUser`）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
+| `seckill-core` | 布隆拦截无效活动 ID；Redis Lua 预扣（`limitPerUser`）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
 | `seckill-order` | MQ/同步幂等建单；Mock 支付；超时关单（MQ 延迟或扫表，均可开关）；取消回滚 |
 | `infra` | K8s（NodePort、PVC、arm64 镜像） |
 
@@ -83,7 +83,7 @@
 
 ```text
 开抢前：建活动(DRAFT) → 预热(PREHEATED) → 开抢(OPEN，按 end_at 投延迟关抢)
-开抢：Lua 预扣(库存-1 + 已购) → MQ → order 落库（expire_at = now+3min，投延迟关单）
+开抢：布隆（无效 ID 直接拒）→ Lua 预扣(库存-1 + 已购) → MQ → order 落库（expire_at = now+3min，投延迟关单）
      └ 若投递/落单失败 → 自动回滚 Redis 库存 + 已购
 支付：调用 Mock 支付 → 固定成功 → 订单状态=已支付（已超时则拒绝并走关单）
 超时：延迟消息到期 → CREATED→EXPIRED → 回滚 Redis 库存 + 清已购
@@ -117,6 +117,7 @@
 - 活动手动关抢与到期关抢竞态：到期时若已非 OPEN 则跳过；扫表与延迟消息双保险
 - 建单/过期消费失败：吞异常不重试（业务侧已回滚库存时避免重复回滚）；依赖扫表/对账兜底
 - 对账依赖预热写入的 `seckill:stock:init:{id}`；旧活动需重新预热才有 init
+- 活动布隆：标准布隆不能删除，关闭后从 DB OPEN 集合重建；假阳性仍走 Lua；`ready` 缺失时 fail-open 到 Lua，避免 Redis 被清空后误杀真实开抢
 
 ## 7. 落地顺序
 

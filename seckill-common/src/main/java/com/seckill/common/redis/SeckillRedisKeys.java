@@ -29,4 +29,14 @@ public final class SeckillRedisKeys {
     public static String limit(long activityId) {
         return "seckill:limit:" + activityId;
     }
+
+    /** 开抢中活动 ID 的布隆过滤器（Redis bitmap）。 */
+    public static String activityBloom() {
+        return "seckill:bloom:activity";
+    }
+
+    /** 布隆已构建标记；缺失时 core 对 Lua 失败开放，避免误杀。 */
+    public static String activityBloomReady() {
+        return "seckill:bloom:ready";
+    }
 }

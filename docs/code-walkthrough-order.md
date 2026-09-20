@@ -38,6 +38,8 @@ POST /api/seckill/{activityId} (+ Authorization: Bearer)
       v
 [SeckillController.grab] → SeckillService.grab(activityId, userId)
       |
+      +- ActivityBloomFilter  # 无效 ID 直接 1003，不打 Lua
+      |
       +- StockLuaExecutor.deduct  # Redis 原子：开抢标记/限购/DECR
       |    失败 → BusinessException（未开抢/重复/售罄）
       |
@@ -66,12 +68,12 @@ POST /api/seckill/{activityId} (+ Authorization: Bearer)
 |---|---|---|---|
 | 创建 | `POST /api/activity` | `ActivityService.create` | DB `DRAFT` |
 | 预热 | `POST /api/activity/{id}/preheat` | `preheat` | 写 `seckill:stock:{id}` + `stock:init`，`PREHEATED` |
-| 开抢 | `POST /api/activity/{id}/open` | `open` | 写 `seckill:open:{id}=1`，`OPEN`，投到期延迟消息 |
-| 关抢 | `POST /api/activity/{id}/close` | `doClose` | `CLOSED` 终态 |
+| 开抢 | `POST /api/activity/{id}/open` | `open` | 写 `seckill:open:{id}=1`，重建布隆，`OPEN`，投到期延迟消息 |
+| 关抢 | `POST /api/activity/{id}/close` | `doClose` | `CLOSED` 终态，删 open 标记并重建布隆 |
 
 状态机：`DRAFT → PREHEATED → OPEN → CLOSED`（终态不复用）。
 
-Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `limit` / `stock:init`。
+Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `limit` / `stock:init` / `bloom:activity` + `bloom:ready`。
 
 ---
 

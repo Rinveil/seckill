@@ -143,6 +143,11 @@ def main() -> int:
         print(json.dumps({"results": RESULTS, "activityId": act_id}, ensure_ascii=False, indent=2))
         return 1
 
+    code, body = req("POST", "/seckill/999999999", token=user_token)
+    data = unwrap(body)
+    ok = data.get("code") == 1003
+    record("4a2.非法活动ID", "code=1003 NOT_STARTED（布隆或 Lua）", ok, f"code={data.get('code')} msg={data.get('message')}")
+
     code, body = req("POST", f"/seckill/{act_id}", token=user_token)
     data = unwrap(body)
     grab_data = data.get("data") if isinstance(data.get("data"), dict) else {}

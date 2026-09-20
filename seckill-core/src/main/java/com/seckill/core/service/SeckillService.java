@@ -4,6 +4,7 @@ import com.seckill.common.config.SeckillFeatureProperties;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.mq.OrderCreateMessage;
 import com.seckill.common.mq.OrderMqConstants;
+import com.seckill.common.redis.ActivityBloomFilter;
 import com.seckill.common.result.ResultCode;
 import com.seckill.core.client.OrderCreateClient;
 import com.seckill.core.redis.StockLuaExecutor;
@@ -28,20 +29,26 @@ public class SeckillService {
     private final SeckillFeatureProperties featureProperties;
     private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
     private final OrderCreateClient orderCreateClient;
+    private final ActivityBloomFilter activityBloomFilter;
 
     public SeckillService(
             StockLuaExecutor stockLuaExecutor,
             SeckillFeatureProperties featureProperties,
             ObjectProvider<RocketMQTemplate> rocketMQTemplate,
-            OrderCreateClient orderCreateClient
+            OrderCreateClient orderCreateClient,
+            ActivityBloomFilter activityBloomFilter
     ) {
         this.stockLuaExecutor = stockLuaExecutor;
         this.featureProperties = featureProperties;
         this.rocketMQTemplate = rocketMQTemplate;
         this.orderCreateClient = orderCreateClient;
+        this.activityBloomFilter = activityBloomFilter;
     }
 
     public Map<String, Object> grab(long activityId, long userId) {
+        if (definitelyAbsent(activityId)) {
+            throw new BusinessException(ResultCode.NOT_STARTED);
+        }
         long remain = stockLuaExecutor.deduct(activityId, userId);
         if (remain == -3) {
             throw new BusinessException(ResultCode.NOT_STARTED);
@@ -69,6 +76,15 @@ public class SeckillService {
                 "orderToken", orderToken,
                 "remainStock", remain
         );
+    }
+
+    private boolean definitelyAbsent(long activityId) {
+        try {
+            return activityBloomFilter.definitelyAbsent(activityId);
+        } catch (RuntimeException ex) {
+            log.warn("activity bloom check failed, fail-open to Lua. activityId={}", activityId, ex);
+            return false;
+        }
     }
 
     private void dispatchCreate(OrderCreateMessage message) {
