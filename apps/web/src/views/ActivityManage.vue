@@ -150,6 +150,8 @@
         <span class="field-tip">每用户限购件数（默认 1）</span>
       </el-form-item>
     </el-form>
+    <template #footer>
+      <el-button @click="formVisible = false">取消</el-button>
       <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
     </template>
   </el-dialog>
