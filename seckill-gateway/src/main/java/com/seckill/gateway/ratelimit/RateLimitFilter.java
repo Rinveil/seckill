@@ -1,14 +1,11 @@
 package com.seckill.gateway.ratelimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -17,12 +14,10 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 简易令牌桶限流（单机内存）：
@@ -89,9 +84,10 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
         return exchange.getResponse().writeWith(Mono.just(buffer));
     }
 
+    /** 早于 JWT 校验（-100），先挡洪峰再验签。 */
     @Override
     public int getOrder() {
-        return -90;
+        return -110;
     }
 
     static class TokenBucket {
