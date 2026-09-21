@@ -3,9 +3,11 @@
 已弃用 GitHub self-hosted Runner。日常：
 
 ```text
-改代码 → commit → push origin main
+改代码 → 同步 docs/code-walkthrough-order.md → commit → push origin main
        → Agent / 本机执行 ./infra/scripts/deploy-local.sh <模块>
 ```
+
+代码导读：[code-walkthrough-order.md](./code-walkthrough-order.md)（每次 push 须与代码同步）。
 
 ```bash
 # 全量

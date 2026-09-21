@@ -1,0 +1,27 @@
+---
+description: 每次 push 前必须同步更新代码导读，使其与当前代码一致
+alwaysApply: true
+---
+
+# 代码导读与 push 同步
+
+每次完成改动并 **push** 时，必须让 `docs/code-walkthrough-order.md` 与即将推上远程的代码一致。不要只改代码不改导读。
+
+## 何时改导读
+
+对照本次 diff，更新导读里对应小节（模块表、时序、网关过滤器、Redis Key、建单/支付、开关、阅读顺序）。涉及鉴权/库存/MQ 时，必要时连同 `docs/architecture.md`、`docs/risks.md` 一并改。
+
+## 执行顺序
+
+1. 改代码（或先改导读再改代码，以最终一致为准）
+2. 更新 `docs/code-walkthrough-order.md`（与代码同一 commit，或紧随其后立刻再 commit）
+3. `git push`
+4. 若已经 push 但导读落后：马上补 commit 再 push，不要等下一轮功能
+
+纯格式、密钥、K8s 资源数值、与前后端订单链路无关的改动：扫一眼后若确实无需改导读，在对用户的变更说明里写 **「导读无需改」**，禁止默默跳过。
+
+## 导读里不要做的
+
+- 不要把尚未实现的功能写进导读
+- 不要为了「好看」大段重写无关章节
+- 不要把 `docs/seckill.code-workspace` 加进 commit
