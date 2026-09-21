@@ -11,6 +11,7 @@ import com.seckill.user.dto.AdminUpdateUserRequest;
 import com.seckill.user.dto.UserPageView;
 import com.seckill.user.dto.UserView;
 import com.seckill.user.mapper.UserMapper;
+import com.seckill.user.support.UserDisabledStore;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,10 +29,16 @@ public class UserAdminService {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final UserDisabledStore userDisabledStore;
 
-    public UserAdminService(UserMapper userMapper, PasswordEncoder passwordEncoder) {
+    public UserAdminService(
+            UserMapper userMapper,
+            PasswordEncoder passwordEncoder,
+            UserDisabledStore userDisabledStore
+    ) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.userDisabledStore = userDisabledStore;
     }
 
     public UserPageView list(String roleHeader, String keyword, String role, String status, int page, int size) {
@@ -120,6 +127,7 @@ public class UserAdminService {
 
         user.setStatus(newStatus);
         userMapper.updateById(user);
+        userDisabledStore.setDisabled(id, newStatus == UserAccount.STATUS_DISABLED);
         return toView(requireUser(id));
     }
 

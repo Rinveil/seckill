@@ -55,6 +55,10 @@ spec:
                 secretKeyRef:
                   name: seckill-secrets
                   key: SEED_ADMIN_NICKNAME
+            - name: SPRING_DATA_REDIS_HOST
+              value: redis
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
           resources:
             requests:
               memory: 128Mi

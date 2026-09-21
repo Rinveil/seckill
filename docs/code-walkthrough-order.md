@@ -109,11 +109,11 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `l
 
 白名单：`/api/user/login`、`/api/user/register`、`/api/mall/**`、`/actuator`。
 
-`JwtAuthGlobalFilter`（order -100）：去伪造头 → 验 JWT → 注入 `X-User-Id/Role/Username` → 失败返 401。不查账号是否禁用。
+`JwtAuthGlobalFilter`（order -100）：去伪造头 → 验 JWT → 查 Redis 禁用标记 → 注入 `X-User-Id/Role/Username`。禁用返回 403/`1007`。
 
-`RateLimitFilter`（order -110，早于 JWT）：仅 `/api/seckill/**`，按客户端 IP 令牌桶（默认 50 QPS、桶容量 10），超限 HTTP 429（body `code=429`，不是 1002）。
+`InternalApiBlockFilter`（order -120）：`/api/order/internal/**` 直接 403。
 
-缺口：`/api/order/**` 会把 `POST /api/order/internal/create` 一并转给 order，见 [risks.md](./risks.md)。
+`RateLimitFilter`（order -110）：`/api/seckill/**` 与登录/注册分桶；IP 取 `X-Real-IP`；超限 HTTP 429、`code=1002`。
 
 ---
 
@@ -137,13 +137,13 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 `createFromMessage`：查重→查价→`insert t_order(CREATED)`→`scheduleExpire`（MQ 延迟）→失败回滚 Redis。
 
 用户 API（`OrderController`，经网关）：
-- `GET /api/order/list` `GET /api/order/{orderNo}`（列表带 `activityTitle`，每条查一次活动标题）
-- `POST /api/order/{orderNo}/pay` → `PAID`（读 CREATED 后 `updateById`，**无 CAS**）
-- `POST /api/order/{orderNo}/cancel` → `CANCELLED` + Redis 回滚（已购计数 -1）
+- `GET /api/order/list` `GET /api/order/{orderNo}`（列表一次查出活动标题）
+- `POST /api/order/{orderNo}/pay` → `PAID`（`CREATED` 条件更新）
+- `POST /api/order/{orderNo}/cancel` → `CANCELLED` + Redis 回滚
 
-关单/取消互斥：`closeCreatedOrder` 用 DB 条件更新 `status=CREATED`。支付未走该 CAS，与过期并发时可能「已付 + 库存已回滚」，见 [risks.md](./risks.md)。
+支付/取消/过期互斥：均 CAS `status=CREATED`。
 
-集群内建单：`POST /api/order/internal/create`（MQ 关闭时 core 直连）。该路径目前也被网关转出。
+集群内建单：`POST /api/order/internal/create`（core 直连）。网关拦截；若仍带 `X-User-Id`，order 再拒一次。
 
 ---
 
@@ -175,8 +175,8 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 详见 [risks.md](./risks.md)。这里只留热路径口诀：
 
 1. 库存真相在 Redis；DB `stock` 是配置快照。对账：`init ≈ redis + CREATED + PAID`
-2. 限购：Lua `bought` vs `limit` 键；预热才写 `limit`；取消/超时 DECR 已购
+2. 限购：Lua `bought` vs `limit`；预热写入，PREHEATED 改限购同步 Redis
 3. 预扣成功但建单失败：core/order 都会回滚 Redis
-4. 过期/取消：`CREATED` 条件更新互斥；**支付尚未 CAS**
+4. 过期/取消/支付：均 `CREATED` 条件更新互斥
 5. 活动手动关 vs 到期关：非 OPEN 则跳过；扫表 + 延迟消息；关时重建布隆
 6. 无效 `activityId`：布隆先挡；假阳性或未就绪走 Lua

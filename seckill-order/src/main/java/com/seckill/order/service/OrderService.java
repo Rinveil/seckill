@@ -22,14 +22,20 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -45,6 +51,7 @@ public class OrderService {
     private final ObjectProvider<RocketMQTemplate> rocketMQTemplate;
     private final OrderProperties orderProperties;
     private final SeckillFeatureProperties featureProperties;
+    private final ObjectProvider<TaskScheduler> taskScheduler;
 
     public OrderService(
             OrderMapper orderMapper,
@@ -52,7 +59,8 @@ public class OrderService {
             StringRedisTemplate stringRedisTemplate,
             ObjectProvider<RocketMQTemplate> rocketMQTemplate,
             OrderProperties orderProperties,
-            SeckillFeatureProperties featureProperties
+            SeckillFeatureProperties featureProperties,
+            ObjectProvider<TaskScheduler> taskScheduler
     ) {
         this.orderMapper = orderMapper;
         this.jdbcTemplate = jdbcTemplate;
@@ -60,6 +68,7 @@ public class OrderService {
         this.rocketMQTemplate = rocketMQTemplate;
         this.orderProperties = orderProperties;
         this.featureProperties = featureProperties;
+        this.taskScheduler = taskScheduler;
     }
 
     /**
@@ -116,14 +125,18 @@ public class OrderService {
         if (!ROLE_ADMIN.equals(role)) {
             qw.eq(SeckillOrder::getUserId, userId);
         }
-        return orderMapper.selectList(qw).stream().map(this::toView).toList();
+        List<SeckillOrder> orders = orderMapper.selectList(qw);
+        Map<Long, String> titles = loadActivityTitles(
+                orders.stream().map(SeckillOrder::getActivityId).distinct().toList()
+        );
+        return orders.stream().map(o -> toView(o, titles.get(o.getActivityId()))).toList();
     }
 
     public OrderView detail(long userId, String role, String orderNo) {
         return toView(requireOwned(userId, role, orderNo));
     }
 
-    /** Mock 支付：固定成功。 */
+    /** Mock 支付：固定成功。CREATED → PAID 条件更新，与过期/取消互斥。 */
     @Transactional
     public OrderView pay(long userId, String role, String orderNo) {
         SeckillOrder order = requireOwned(userId, role, orderNo);
@@ -140,9 +153,16 @@ public class OrderService {
             expireIfCreated(order.getOrderNo());
             throw new BusinessException(ResultCode.BAD_REQUEST, "订单已过期，无法支付");
         }
-        order.setStatus(SeckillOrder.STATUS_PAID);
-        orderMapper.updateById(order);
-        return toView(order);
+        boolean paid = casStatus(order.getOrderNo(), SeckillOrder.STATUS_CREATED, SeckillOrder.STATUS_PAID);
+        if (!paid) {
+            SeckillOrder latest = findByOrderNo(orderNo);
+            if (latest != null && SeckillOrder.STATUS_PAID.equals(latest.getStatus())) {
+                return toView(latest);
+            }
+            throw new BusinessException(ResultCode.BAD_REQUEST, "订单已过期或已取消，无法支付");
+        }
+        SeckillOrder fresh = findByOrderNo(orderNo);
+        return toView(fresh != null ? fresh : order);
     }
 
     /** 取消未支付订单并回滚 Redis。 */
@@ -206,19 +226,40 @@ public class OrderService {
 
     /** 条件更新，保证支付/取消/过期互斥，避免双重回滚。 */
     private boolean closeCreatedOrder(String orderNo, String targetStatus) {
+        return casStatus(orderNo, SeckillOrder.STATUS_CREATED, targetStatus);
+    }
+
+    private boolean casStatus(String orderNo, String fromStatus, String toStatus) {
         return orderMapper.update(
                 null,
                 new LambdaUpdateWrapper<SeckillOrder>()
                         .eq(SeckillOrder::getOrderNo, orderNo)
-                        .eq(SeckillOrder::getStatus, SeckillOrder.STATUS_CREATED)
-                        .set(SeckillOrder::getStatus, targetStatus)
+                        .eq(SeckillOrder::getStatus, fromStatus)
+                        .set(SeckillOrder::getStatus, toStatus)
         ) == 1;
     }
 
     private void scheduleExpire(String orderNo, int expireMinutes) {
-        if (!featureProperties.mqEnabled()) {
+        if (featureProperties.mqEnabled()) {
+            scheduleExpireOnMq(orderNo, expireMinutes);
             return;
         }
+        TaskScheduler scheduler = taskScheduler.getIfAvailable();
+        if (scheduler == null) {
+            log.warn("TaskScheduler missing, skip local expire. orderNo={}", orderNo);
+            return;
+        }
+        Instant when = Instant.now().plus(Math.max(expireMinutes, 1), ChronoUnit.MINUTES);
+        scheduler.schedule(() -> {
+            try {
+                expireIfCreated(orderNo);
+            } catch (RuntimeException ex) {
+                log.warn("local expire failed. orderNo={}", orderNo, ex);
+            }
+        }, when);
+    }
+
+    private void scheduleExpireOnMq(String orderNo, int expireMinutes) {
         RocketMQTemplate template = rocketMQTemplate.getIfAvailable();
         if (template == null) {
             log.warn("RocketMQTemplate missing, skip expire schedule. orderNo={}", orderNo);
@@ -280,16 +321,29 @@ public class OrderService {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    private String loadActivityTitle(long activityId) {
-        List<String> rows = jdbcTemplate.query(
-                "SELECT title FROM t_activity WHERE id = ?",
-                (rs, rowNum) -> rs.getString("title"),
-                activityId
+    private Map<Long, String> loadActivityTitles(Collection<Long> ids) {
+        Map<Long, String> titles = new HashMap<>();
+        if (ids == null || ids.isEmpty()) {
+            return titles;
+        }
+        String placeholders = ids.stream().map(id -> "?").reduce((a, b) -> a + "," + b).orElse("?");
+        jdbcTemplate.query(
+                "SELECT id, title FROM t_activity WHERE id IN (" + placeholders + ")",
+                (RowCallbackHandler) rs -> titles.put(rs.getLong("id"), rs.getString("title")),
+                ids.toArray()
         );
-        return rows.isEmpty() ? null : rows.get(0);
+        return titles;
+    }
+
+    private String loadActivityTitle(long activityId) {
+        return loadActivityTitles(List.of(activityId)).get(activityId);
     }
 
     private OrderView toView(SeckillOrder order) {
+        return toView(order, loadActivityTitle(order.getActivityId()));
+    }
+
+    private OrderView toView(SeckillOrder order, String activityTitle) {
         Instant createdAt = order.getCreatedAt() == null
                 ? null
                 : order.getCreatedAt().atZone(ZONE).toInstant();
@@ -300,7 +354,7 @@ public class OrderService {
                 order.getOrderNo(),
                 order.getUserId(),
                 order.getActivityId(),
-                loadActivityTitle(order.getActivityId()),
+                activityTitle,
                 order.getStatus(),
                 order.getAmountFen(),
                 createdAt,

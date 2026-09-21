@@ -39,4 +39,18 @@ public final class SeckillRedisKeys {
     public static String activityBloomReady() {
         return "seckill:bloom:ready";
     }
+
+    /** 某活动下全部已购计数，删除活动时 SCAN/KEYS 清理。 */
+    public static String boughtPattern(long activityId) {
+        return "seckill:bought:" + activityId + ":*";
+    }
+
+    /** 禁用账号标记；网关验签后若存在则拒绝，即使 JWT 未过期。 */
+    public static String userDisabled(long userId) {
+        return "seckill:user:disabled:" + userId;
+    }
+
+    public static String userDisabledPattern() {
+        return "seckill:user:disabled:*";
+    }
 }

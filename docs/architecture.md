@@ -25,7 +25,7 @@
 |---|---|
 | 注册 | 开放；角色固定为 **USER**，不可选 ADMIN |
 | 管理员 | **种子账号** + **运营用户管理**可创建 ADMIN；公开注册不可选 ADMIN |
-| 用户管理 | B 端运营：列表筛选、创建、改昵称/角色、启停、重置密码；禁用后不能重新登录（未过期 JWT 网关仍放行，见 [risks.md](./risks.md)） |
+| 用户管理 | B 端运营：列表筛选、创建、改昵称/角色、启停、重置密码；禁用后不能登录，网关拒绝未过期 JWT |
 | 自测方式 | **同一账号可做运营 + 自测抢购**（用种子 ADMIN 即可两条链路都测）；普通 USER 主要用于抢购 |
 | 标识 | 仅 **用户名**（不用手机、邮箱） |
 | 验证码 | **无** |
@@ -81,7 +81,7 @@
 3. Gateway 验签 → 注入 `X-User-Id` / `X-User-Role`（先剥客户端伪造头）  
 4. 运营写接口：`ADMIN`；抢购 / 下单 / 支付 / 取消：已登录即可  
 5. `JWT_SECRET` 仅环境变量 / Secret  
-6. 禁用账号：登录与 `/me` 会拦；网关不查库，未过期 Token 仍可访问业务接口（见 [risks.md](./risks.md)）  
+6. 禁用账号：登录、`/me` 与网关 Redis 标记都会拦；网关 Redis 异常时 fail-open  
 
 ## 5. 主链路（含支付与取消）
 
@@ -99,11 +99,11 @@
 
 | 开关 | 关闭时行为 |
 |---|---|
-| `seckill.mq.enabled=false` | 抢购不经 RocketMQ：core HTTP 同步调 order `/api/order/internal/create`；不注册 MQ Listener；不投延迟关单/关抢；排除 RocketMQ 自动配置（可停 NameServer/Broker） |
-| `seckill.schedule.enabled=false` | 不注册订单过期扫表、活动到期扫表、库存对账定时任务 |
+| `seckill.mq.enabled=false` | 抢购 HTTP 同步调 order `/api/order/internal/create`（不经网关）；不注册 MQ Listener；关单/关抢改本机 `TaskScheduler`；排除 RocketMQ 自动配置 |
+| `seckill.schedule.enabled=false` | 不注册订单过期扫表、活动到期扫表、库存对账 Job（本机延迟仍在） |
 
-本机 `application.yml` 默认两开关为 **false**（方便裸起 Java）。**当前 K8s 为 true**（`infra/k8s/21-activity.yaml` / `22-core.yaml` / `23-order.yaml`）。  
-关掉时：不投延迟关单/关抢，且若同时关扫表，待支付订单**不会**自动过期。重新开启：`SECKILL_MQ_ENABLED=true`、`SECKILL_SCHEDULE_ENABLED=true`，RocketMQ replicas=1。
+本机 `application.yml` 默认两开关为 **false**。**当前 K8s 为 true**。  
+重新开启 MQ：`SECKILL_MQ_ENABLED=true`、`SECKILL_SCHEDULE_ENABLED=true`，RocketMQ replicas=1。
 
 ## 6. 部署形态
 
@@ -116,17 +116,17 @@
 
 ## 7. 并发风险（摘要）
 
-完整清单与「应修 / 已做对」见 **[risks.md](./risks.md)**。不要把下面摘要当成已全部落地。
+完整清单见 **[risks.md](./risks.md)**。
 
 | 级别 | 点 | 代码事实 |
 |---|---|---|
-| 高 | 内部建单口经网关暴露 | `POST /api/order/internal/create` 任意 JWT 可调，绕过 Lua |
-| 高 | 支付未 CAS | `pay()` 用 `updateById`；过期/取消才 `WHERE status=CREATED` |
+| 高 | 内部建单口经网关暴露 | **已修**：网关 403 + order 拒绝带 `X-User-Id` 的调用 |
+| 高 | 支付未 CAS | **已修**：`pay()` 与过期/取消同样 `CREATED` 条件更新 |
 | 中 | 预扣成功 MQ 失败 | 回滚库存，用户看到「系统繁忙」需重试 |
-| 中 | 开关双关 | 无延迟关单也无扫表，订单不会自动过期 |
-| 中 | PREHEATED 改限购未再预热 | Lua 仍用 Redis 旧 `limit` |
+| 中 | 开关双关 | **已修**：MQ 关时本机 `TaskScheduler` 延迟关单/关抢 |
+| 中 | PREHEATED 改限购未再预热 | **已修**：更新时同步写 Redis `limit` |
 | 低 | 布隆假阳性 / fail-open | 假阳性进 Lua；`ready` 缺失不误杀真开抢 |
-| 低 | 限流单机、XFF 可伪 | 仅 `/api/seckill/**`；多副本不共享桶 |
+| 低 | 限流单机 | 仅 `/api/seckill/**` 与登录注册；IP 取 nginx `X-Real-IP` |
 
 其它已按设计落地的：Lua 预扣与回滚同一语义；建单 `orderNo` 幂等；关抢与到期双保险；对账 `init ≈ redis + CREATED + PAID`（依赖预热写入的 init）。
 
@@ -138,7 +138,7 @@
 4. `apps/web`：Element Plus B 端 — **已完成**（商城 / 看板 / 用户管理 / 克隆表单）  
 5. `activity`：活动 CRUD + 开/关；预热与直接改 Redis 库存 — **已完成**  
 6. `core`：Lua 预扣 + 失败自动回滚 + 布隆拦截无效 ID — **已完成**  
-7. `order`：MQ 建单 + **Mock 支付成功** + **取消并回滚库存** — **已完成**（支付 CAS 仍缺，见 risks）  
+7. `order`：MQ 建单 + **Mock 支付成功** + **取消并回滚库存** — **已完成**（支付 CAS 已做）  
 8. 订单支付超时（3 分钟）+ 活动 `end_at` 自动关抢 — **已完成**  
 9. 活动状态机 DRAFT→PREHEATED→OPEN→CLOSED（终态不复用）— **已完成**  
 10. RocketMQ 延迟关单/关抢 + 扫表兜底 + 库存对账 — **已完成**  

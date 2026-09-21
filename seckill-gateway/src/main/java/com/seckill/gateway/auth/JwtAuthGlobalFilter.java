@@ -2,6 +2,8 @@ package com.seckill.gateway.auth;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seckill.common.redis.SeckillRedisKeys;
+import com.seckill.common.result.ResultCode;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -10,6 +12,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -34,16 +37,21 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     public static final String HEADER_USER_ROLE = "X-User-Role";
     public static final String HEADER_USERNAME = "X-Username";
 
-    /** Ant 风格通配符匹配器，用于白名单中的 ** 等 glob 模式（如 /api/mall/**）。 */
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 
     private final SeckillGatewayProperties properties;
     private final ObjectMapper objectMapper;
+    private final ReactiveStringRedisTemplate redis;
     private final SecretKey key;
 
-    public JwtAuthGlobalFilter(SeckillGatewayProperties properties, ObjectMapper objectMapper) {
+    public JwtAuthGlobalFilter(
+            SeckillGatewayProperties properties,
+            ObjectMapper objectMapper,
+            ReactiveStringRedisTemplate redis
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.redis = redis;
         byte[] bytes = properties.getJwt().getSecret().getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) {
             throw new IllegalStateException("JWT_SECRET must be at least 32 bytes");
@@ -80,13 +88,25 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
             if (!StringUtils.hasText(userId)) {
                 return unauthorized(exchange);
             }
+            long uid;
+            try {
+                uid = Long.parseLong(userId);
+            } catch (NumberFormatException ex) {
+                return unauthorized(exchange);
+            }
 
             ServerHttpRequest mutated = stripUserHeaders(request)
                     .header(HEADER_USER_ID, userId)
                     .header(HEADER_USER_ROLE, role == null ? "" : role)
                     .header(HEADER_USERNAME, username == null ? "" : username)
                     .build();
-            return chain.filter(exchange.mutate().request(mutated).build());
+            ServerWebExchange next = exchange.mutate().request(mutated).build();
+            return redis.hasKey(SeckillRedisKeys.userDisabled(uid))
+                    .onErrorReturn(false)
+                    .defaultIfEmpty(false)
+                    .flatMap(disabled -> Boolean.TRUE.equals(disabled)
+                            ? accountDisabled(exchange)
+                            : chain.filter(next));
         } catch (Exception ex) {
             return unauthorized(exchange);
         }
@@ -94,7 +114,7 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
     private boolean isWhitelisted(String path) {
         return properties.getAuth().getWhitelist().stream()
-                .filter(StringUtils::hasText)
+                .filter(StringUtils.hasText)
                 .anyMatch(w -> w.contains("*")
                         ? PATH_MATCHER.match(w, path)
                         : path.equals(w) || path.startsWith(w + "/"));
@@ -115,17 +135,31 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> unauthorized(ServerWebExchange exchange) {
-        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        return json(exchange, HttpStatus.UNAUTHORIZED, ResultCode.UNAUTHORIZED.code(), "未登录");
+    }
+
+    private Mono<Void> accountDisabled(ServerWebExchange exchange) {
+        return json(
+                exchange,
+                HttpStatus.FORBIDDEN,
+                ResultCode.ACCOUNT_DISABLED.code(),
+                ResultCode.ACCOUNT_DISABLED.message()
+        );
+    }
+
+    private Mono<Void> json(ServerWebExchange exchange, HttpStatus status, int code, String message) {
+        exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("code", 401);
-        body.put("message", "未登录");
+        body.put("code", code);
+        body.put("message", message);
         body.put("data", null);
         byte[] bytes;
         try {
             bytes = objectMapper.writeValueAsBytes(body);
         } catch (JsonProcessingException e) {
-            bytes = "{\"code\":401,\"message\":\"未登录\",\"data\":null}".getBytes(StandardCharsets.UTF_8);
+            bytes = ("{\"code\":" + code + ",\"message\":\"" + message + "\",\"data\":null}")
+                    .getBytes(StandardCharsets.UTF_8);
         }
         DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(bytes);
         return exchange.getResponse().writeWith(Mono.just(buffer));

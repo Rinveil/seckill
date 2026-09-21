@@ -14,7 +14,7 @@
 | 4 | `apps/web`：Element Plus B 端 | 已完成 |
 | 5 | `activity`：CRUD + 开/关 + 预热/改 Redis | 已完成 |
 | 6 | `core`：Lua 预扣 + 失败回滚 + 布隆 | 已完成 |
-| 7 | `order`：MQ 建单 + Mock 支付 + 取消回滚 | 已完成（支付 CAS 未做） |
+| 7 | `order`：MQ 建单 + Mock 支付 + 取消回滚 | 已完成（支付 CAS 已做） |
 | 8 | 订单 3 分钟超时 + 活动 `end_at` 关抢 | 已完成 |
 | 9 | 状态机 DRAFT→PREHEATED→OPEN→CLOSED | 已完成 |
 | 10 | RocketMQ 延迟 + 扫表 + 对账 | 已完成 |
@@ -24,4 +24,4 @@
 
 编号外已做：公开商城、网关抢购限流、活动布隆、数据看板、前端克隆表单、可配 `limitPerUser`。
 
-未做且值得修（非新功能）：内部建单口不进网关、`pay()` 条件更新。见 [risks.md](./risks.md)。
+未做（有意后置）：真实支付。其余原缺口见 [risks.md](./risks.md)（内部建单、支付 CAS、限购 Redis、禁用 Token、限流 IP 已修）。

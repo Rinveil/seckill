@@ -24,6 +24,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -33,6 +34,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 活动状态机：DRAFT → PREHEATED → OPEN → CLOSED（终态，同活动不复用）。
@@ -50,6 +52,7 @@ public class ActivityService {
     private final JdbcTemplate jdbcTemplate;
     private final SeckillFeatureProperties featureProperties;
     private final ActivityBloomFilter activityBloomFilter;
+    private final ObjectProvider<TaskScheduler> taskScheduler;
 
     public ActivityService(
             ActivityMapper activityMapper,
@@ -57,7 +60,8 @@ public class ActivityService {
             ObjectProvider<RocketMQTemplate> rocketMQTemplate,
             JdbcTemplate jdbcTemplate,
             SeckillFeatureProperties featureProperties,
-            ActivityBloomFilter activityBloomFilter
+            ActivityBloomFilter activityBloomFilter,
+            ObjectProvider<TaskScheduler> taskScheduler
     ) {
         this.activityMapper = activityMapper;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -65,6 +69,7 @@ public class ActivityService {
         this.jdbcTemplate = jdbcTemplate;
         this.featureProperties = featureProperties;
         this.activityBloomFilter = activityBloomFilter;
+        this.taskScheduler = taskScheduler;
     }
 
     public List<ActivityView> list() {
@@ -136,6 +141,12 @@ public class ActivityService {
         entity.setEndAt(toLocal(request.endAt()));
         entity.setLimitPerUser(request.limitPerUser() == null || request.limitPerUser() < 1 ? 1 : request.limitPerUser());
         activityMapper.updateById(entity);
+        if (status == Activity.STATUS_PREHEATED) {
+            stringRedisTemplate.opsForValue().set(
+                    SeckillRedisKeys.limit(id),
+                    String.valueOf(entity.getLimitPerUser())
+            );
+        }
         return toView(entity);
     }
 
@@ -146,9 +157,17 @@ public class ActivityService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "开抢中不可删除，请先关闭");
         }
         activityMapper.deleteById(id);
-        stringRedisTemplate.delete(SeckillRedisKeys.stock(id));
-        stringRedisTemplate.delete(SeckillRedisKeys.open(id));
-        stringRedisTemplate.delete(SeckillRedisKeys.stockInit(id));
+        stringRedisTemplate.delete(List.of(
+                SeckillRedisKeys.stock(id),
+                SeckillRedisKeys.open(id),
+                SeckillRedisKeys.stockInit(id),
+                SeckillRedisKeys.limit(id)
+        ));
+        Set<String> bought = stringRedisTemplate.keys(SeckillRedisKeys.boughtPattern(id));
+        if (bought != null && !bought.isEmpty()) {
+            stringRedisTemplate.delete(bought);
+        }
+        refreshBloom();
     }
 
     public ActivityView open(String role, long id) {
@@ -296,9 +315,26 @@ public class ActivityService {
     }
 
     private void scheduleExpire(long activityId, long delayMs) {
-        if (!featureProperties.mqEnabled()) {
+        if (featureProperties.mqEnabled()) {
+            scheduleExpireOnMq(activityId, delayMs);
             return;
         }
+        TaskScheduler scheduler = taskScheduler.getIfAvailable();
+        if (scheduler == null) {
+            log.warn("TaskScheduler missing, skip local activity expire. id={}", activityId);
+            return;
+        }
+        Instant when = Instant.now().plusMillis(Math.max(delayMs, 1000L));
+        scheduler.schedule(() -> {
+            try {
+                expireIfOpen(activityId);
+            } catch (RuntimeException ex) {
+                log.warn("local activity expire failed. id={}", activityId, ex);
+            }
+        }, when);
+    }
+
+    private void scheduleExpireOnMq(long activityId, long delayMs) {
         RocketMQTemplate template = rocketMQTemplate.getIfAvailable();
         if (template == null) {
             log.warn("RocketMQTemplate missing, skip activity expire schedule. id={}", activityId);

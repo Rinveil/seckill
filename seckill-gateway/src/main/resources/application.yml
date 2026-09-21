@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: seckill-gateway
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
   cloud:
     gateway:
       globalcors:
