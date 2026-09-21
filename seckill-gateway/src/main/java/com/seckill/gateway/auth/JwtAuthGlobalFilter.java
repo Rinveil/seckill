@@ -114,7 +114,7 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
     private boolean isWhitelisted(String path) {
         return properties.getAuth().getWhitelist().stream()
-                .filter(StringUtils.hasText)
+                .filter(StringUtils::hasText)
                 .anyMatch(w -> w.contains("*")
                         ? PATH_MATCHER.match(w, path)
                         : path.equals(w) || path.startsWith(w + "/"));

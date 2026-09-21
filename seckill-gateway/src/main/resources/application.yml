@@ -57,3 +57,6 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    redis:
+      enabled: false
