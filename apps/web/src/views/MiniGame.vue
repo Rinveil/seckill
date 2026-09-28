@@ -48,7 +48,7 @@ const H = 480
 const canvasRef = ref(null)
 const score = ref(0)
 const combo = ref(0)
-const lives = ref(3)
+const lives = ref(5)
 const best = ref(Number(localStorage.getItem(BEST_KEY) || 0))
 const phase = ref('idle')
 
@@ -62,13 +62,13 @@ let spawnAcc = 0
 let lastTs = 0
 
 function paddle() {
-  return { w: 96, h: 16, y: H - 34 }
+  return { w: 128, h: 18, y: H - 36 }
 }
 
 function resetRound() {
   score.value = 0
   combo.value = 0
-  lives.value = 3
+  lives.value = 5
   paddleX = W / 2
   drops = []
   sparks = []
@@ -78,6 +78,7 @@ function resetRound() {
 
 function restart() {
   resetRound()
+  spawn()
   phase.value = 'run'
   canvasRef.value?.focus()
 }
@@ -100,13 +101,14 @@ function spawn() {
   let kind = 'stone'
   if (roll < 0.12) kind = 'bomb'
   else if (roll < 0.22) kind = 'jade'
-  const r = kind === 'jade' ? 16 : 14
+  const spread = Math.min(W / 2 - r, 70 + score.value * 0.35)
+  const x = Math.min(W - r, Math.max(r, paddleX - spread + Math.random() * spread * 2))
   drops.push({
-    x: r + Math.random() * (W - r * 2),
+    x,
     y: -r,
     r,
     kind,
-    vy: 2.1 + score.value / 90 + Math.random() * 0.6
+    vy: 1.55 + score.value / 140 + Math.random() * 0.45
   })
 }
 
