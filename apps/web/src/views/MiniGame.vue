@@ -4,7 +4,7 @@
       <div class="card-head">
         <div>
           <div class="title">小游戏 · 接住石头</div>
-          <div class="hint">左右移动托盘接石头，躲开「售罄」炸弹 · 最高分存在本机</div>
+          <div class="hint">左右移动托盘接石头，躲开「售罄」炸弹 · 5 条命 · 最高分存在本机</div>
         </div>
         <el-button type="primary" @click="restart">再来一局</el-button>
       </div>
@@ -101,6 +101,7 @@ function spawn() {
   let kind = 'stone'
   if (roll < 0.12) kind = 'bomb'
   else if (roll < 0.22) kind = 'jade'
+  const r = kind === 'jade' ? 16 : 14
   const spread = Math.min(W / 2 - r, 70 + score.value * 0.35)
   const x = Math.min(W - r, Math.max(r, paddleX - spread + Math.random() * spread * 2))
   drops.push({
