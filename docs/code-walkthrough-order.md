@@ -95,7 +95,10 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `l
 | `/seckill/result` | `Result.vue` 抢购结果 + 去支付 | 登录 |
 | `/my/orders` | `MyOrders.vue` 我的订单 | 登录 |
 | `/ops/dashboard` | `Dashboard.vue` 数据看板 | ADMIN |
+| `/ops/game` | `MiniGame.vue` 接石头小游戏 | ADMIN |
 | `/ops/*` | 运营管理 | ADMIN |
+
+运营侧栏 `AdminLayout`：运营区 + **休闲 / 小游戏**（`/ops/game`，仅 ADMIN，纯前端，最高分在 localStorage）。
 
 ### 4.2 商城（`Mall.vue`）
 
