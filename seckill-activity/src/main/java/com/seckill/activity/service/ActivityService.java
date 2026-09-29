@@ -5,9 +5,12 @@ import com.seckill.activity.domain.Activity;
 import com.seckill.activity.dto.ActivityCreateRequest;
 import com.seckill.activity.dto.ActivityUpdateRequest;
 import com.seckill.activity.dto.ActivityView;
+import com.seckill.activity.dto.MallSearchHit;
+import com.seckill.activity.dto.MallSearchPage;
 import com.seckill.activity.dto.MallView;
 import com.seckill.activity.dto.StockReconcileView;
 import com.seckill.activity.mapper.ActivityMapper;
+import com.seckill.activity.search.MallActivityIndex;
 import com.seckill.common.config.SeckillFeatureProperties;
 import com.seckill.common.exception.BusinessException;
 import com.seckill.common.mq.ActivityExpireMessage;
@@ -32,9 +35,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 活动状态机：DRAFT → PREHEATED → OPEN → CLOSED（终态，同活动不复用）。
@@ -53,6 +59,7 @@ public class ActivityService {
     private final SeckillFeatureProperties featureProperties;
     private final ActivityBloomFilter activityBloomFilter;
     private final ObjectProvider<TaskScheduler> taskScheduler;
+    private final MallActivityIndex mallActivityIndex;
 
     public ActivityService(
             ActivityMapper activityMapper,
@@ -61,7 +68,8 @@ public class ActivityService {
             JdbcTemplate jdbcTemplate,
             SeckillFeatureProperties featureProperties,
             ActivityBloomFilter activityBloomFilter,
-            ObjectProvider<TaskScheduler> taskScheduler
+            ObjectProvider<TaskScheduler> taskScheduler,
+            MallActivityIndex mallActivityIndex
     ) {
         this.activityMapper = activityMapper;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -70,6 +78,7 @@ public class ActivityService {
         this.featureProperties = featureProperties;
         this.activityBloomFilter = activityBloomFilter;
         this.taskScheduler = taskScheduler;
+        this.mallActivityIndex = mallActivityIndex;
     }
 
     public List<ActivityView> list() {
@@ -100,6 +109,25 @@ public class ActivityService {
         return toMallView(entity);
     }
 
+    public MallSearchPage searchForMall(String keyword, String status, int page, int size) {
+        int p = Math.max(page, 1);
+        int s = Math.min(Math.max(size, 1), 20);
+        if ((long) p * s > 200) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "页码过大");
+        }
+        String st = normalizeMallStatus(status);
+        String q = keyword == null ? "" : keyword.trim();
+        if (mallActivityIndex.enabled()) {
+            try {
+                MallActivityIndex.SearchPage es = mallActivityIndex.search(q, st, (p - 1) * s, s);
+                return hydrateSearch(es, p, s, true);
+            } catch (RuntimeException ex) {
+                log.warn("mall elasticsearch search failed, fallback MySQL", ex);
+            }
+        }
+        return searchMallFromMysql(q, st, p, s);
+    }
+
     public ActivityView create(String role, ActivityCreateRequest request) {
         requireAdmin(role);
         validateTimeRange(request.startAt(), request.endAt());
@@ -114,6 +142,7 @@ public class ActivityService {
         entity.setEndAt(toLocal(request.endAt()));
         entity.setLimitPerUser(request.limitPerUser() == null || request.limitPerUser() < 1 ? 1 : request.limitPerUser());
         activityMapper.insert(entity);
+        syncMallIndex(entity);
         return toView(entity);
     }
 
@@ -130,6 +159,7 @@ public class ActivityService {
             assertOpenImmutableFields(entity, request);
             entity.setTitle(request.title().trim());
             activityMapper.updateById(entity);
+            syncMallIndex(entity);
             return toView(entity);
         }
         // DRAFT / PREHEATED：可改配置
@@ -147,6 +177,7 @@ public class ActivityService {
                     String.valueOf(entity.getLimitPerUser())
             );
         }
+        syncMallIndex(entity);
         return toView(entity);
     }
 
@@ -157,6 +188,7 @@ public class ActivityService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "开抢中不可删除，请先关闭");
         }
         activityMapper.deleteById(id);
+        mallActivityIndex.delete(id);
         stringRedisTemplate.delete(List.of(
                 SeckillRedisKeys.stock(id),
                 SeckillRedisKeys.open(id),
@@ -192,6 +224,7 @@ public class ActivityService {
         stringRedisTemplate.opsForValue().set(SeckillRedisKeys.open(id), "1");
         refreshBloom();
         scheduleExpire(id, Duration.between(now, entity.getEndAt()).toMillis());
+        syncMallIndex(entity);
         return toView(entity);
     }
 
@@ -295,6 +328,7 @@ public class ActivityService {
         activityMapper.updateById(entity);
         stringRedisTemplate.delete(SeckillRedisKeys.open(entity.getId()));
         refreshBloom();
+        syncMallIndex(entity);
         return toView(entity);
     }
 
@@ -373,6 +407,7 @@ public class ActivityService {
         stringRedisTemplate.opsForValue().set(SeckillRedisKeys.limit(id), String.valueOf(limit));
         entity.setStatus(Activity.STATUS_PREHEATED);
         activityMapper.updateById(entity);
+        syncMallIndex(entity);
         return toView(entity);
     }
 
@@ -465,6 +500,72 @@ public class ActivityService {
                 toInstant(entity.getEndAt()),
                 entity.getLimitPerUser() == null ? 1 : entity.getLimitPerUser()
         );
+    }
+
+    private void syncMallIndex(Activity activity) {
+        try {
+            mallActivityIndex.sync(activity);
+        } catch (RuntimeException ex) {
+            log.warn("sync mall elasticsearch failed, id={}", activity.getId(), ex);
+        }
+    }
+
+    private MallSearchPage hydrateSearch(MallActivityIndex.SearchPage es, int page, int size, boolean fromEs) {
+        List<Long> ids = es.hits().stream().map(MallActivityIndex.HitRow::id).toList();
+        if (ids.isEmpty()) {
+            return new MallSearchPage(List.of(), es.total(), page, size, fromEs);
+        }
+        Map<Long, Activity> byId = activityMapper.selectList(
+                new LambdaQueryWrapper<Activity>().in(Activity::getId, ids)
+        ).stream().collect(Collectors.toMap(Activity::getId, a -> a, (a, b) -> a));
+        List<MallSearchHit> items = new ArrayList<>();
+        for (MallActivityIndex.HitRow row : es.hits()) {
+            Activity entity = byId.get(row.id());
+            if (entity == null || statusOf(entity) == Activity.STATUS_DRAFT) {
+                continue;
+            }
+            items.add(new MallSearchHit(toMallView(entity), row.highlightedTitle()));
+        }
+        return new MallSearchPage(items, es.total(), page, size, fromEs);
+    }
+
+    private MallSearchPage searchMallFromMysql(String keyword, String status, int page, int size) {
+        LambdaQueryWrapper<Activity> qw = new LambdaQueryWrapper<Activity>()
+                .in(Activity::getStatus, Activity.STATUS_PREHEATED, Activity.STATUS_OPEN, Activity.STATUS_CLOSED)
+                .orderByDesc(Activity::getId);
+        if (status != null) {
+            qw.eq(Activity::getStatus, mallStatusCode(status));
+        }
+        if (!keyword.isEmpty()) {
+            qw.like(Activity::getTitle, keyword);
+        }
+        Long total = activityMapper.selectCount(qw);
+        int offset = (page - 1) * size;
+        qw.last("LIMIT " + offset + "," + size);
+        List<MallSearchHit> items = activityMapper.selectList(qw).stream()
+                .map(a -> new MallSearchHit(toMallView(a), a.getTitle()))
+                .toList();
+        return new MallSearchPage(items, total == null ? 0 : total, page, size, false);
+    }
+
+    private static String normalizeMallStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        String st = status.trim().toUpperCase();
+        if ("OPEN".equals(st) || "PREHEATED".equals(st) || "CLOSED".equals(st)) {
+            return st;
+        }
+        throw new BusinessException(ResultCode.BAD_REQUEST, "无效的活动状态");
+    }
+
+    private static int mallStatusCode(String status) {
+        return switch (status) {
+            case "OPEN" -> Activity.STATUS_OPEN;
+            case "PREHEATED" -> Activity.STATUS_PREHEATED;
+            case "CLOSED" -> Activity.STATUS_CLOSED;
+            default -> throw new BusinessException(ResultCode.BAD_REQUEST, "无效的活动状态");
+        };
     }
 
     private MallView toMallView(Activity entity) {

@@ -103,6 +103,15 @@ export function getMallList() {
   return request('/api/mall/list')
 }
 
+export function searchMall({ q, status, page, size } = {}) {
+  const qs = new URLSearchParams()
+  if (q) qs.set('q', q)
+  if (status) qs.set('status', status)
+  qs.set('page', String(page || 1))
+  qs.set('size', String(size || 8))
+  return request(`/api/mall/search?${qs.toString()}`)
+}
+
 export function getMallDetail(id) {
   return request(`/api/mall/${id}`)
 }

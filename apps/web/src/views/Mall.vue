@@ -19,7 +19,14 @@
 
     <main class="mall-main" v-loading="loading">
       <div class="filter-bar">
-        <el-input v-model="keyword" placeholder="搜索商品" clearable size="small" style="width: 200px" />
+        <el-input
+          v-model="keyword"
+          placeholder="搜索商品"
+          clearable
+          size="small"
+          style="width: 240px"
+          @keyup.enter="loadNow"
+        />
         <el-radio-group v-model="filter" size="small">
           <el-radio-button label="">全部</el-radio-button>
           <el-radio-button label="OPEN">开抢中</el-radio-button>
@@ -29,10 +36,10 @@
         <el-button :loading="loading" size="small" @click="load">刷新</el-button>
       </div>
 
-      <el-empty v-if="!filtered.length" description="暂无活动" />
+      <el-empty v-if="!rows.length" description="暂无活动" />
 
       <el-row v-else :gutter="16">
-        <el-col v-for="row in pagedRows" :key="row.id" :xs="24" :sm="12" :md="8" :lg="6">
+          <el-col v-for="row in rows" :key="row.id" :xs="24" :sm="12" :md="8" :lg="6">
           <el-card class="goods-card" shadow="hover" :body-style="{ padding: 0 }">
             <div class="goods-img" @click="$router.push(`/mall/${row.id}`)">
               <img src="/product.svg" alt="秒杀商品" />
@@ -41,7 +48,12 @@
               </el-tag>
             </div>
             <div class="goods-body">
-              <div class="goods-title" :title="row.title" @click="$router.push(`/mall/${row.id}`)">{{ row.title }}</div>
+              <div
+                class="goods-title"
+                :title="row.title"
+                @click="$router.push(`/mall/${row.id}`)"
+                v-html="titleHtml(row)"
+              />
               <div class="price-row">
                 <span class="seckill-price">¥{{ (row.priceFen / 100).toFixed(2) }}</span>
                 <span class="origin-price">¥{{ (row.originPriceFen / 100).toFixed(2) }}</span>
@@ -67,11 +79,11 @@
         </el-col>
       </el-row>
       <el-pagination
-        v-if="filtered.length > pageSize"
+        v-if="total > pageSize"
         style="margin-top: 20px; justify-content: center; display: flex"
         v-model:current-page="currentPage"
         :page-size="pageSize"
-        :total="filtered.length"
+        :total="total"
         layout="prev, pager, next, total"
       />
     </main>
@@ -79,14 +91,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getMallList, isAdmin, isLoggedIn, clearAuth } from '../api'
+import { searchMall, isAdmin, isLoggedIn, clearAuth } from '../api'
 
 const router = useRouter()
 const loading = ref(false)
 const rows = ref([])
+const highlights = ref({})
+const total = ref(0)
 const filter = ref('')
 const keyword = ref('')
 const currentPage = ref(1)
@@ -95,18 +109,12 @@ const now = ref(Date.now())
 const loggedIn = computed(() => isLoggedIn())
 const isAdminVal = computed(() => isAdmin())
 let timer
+let debounceTimer
 
-const filtered = computed(() => {
-  let list = filter.value ? rows.value.filter((r) => r.status === filter.value) : rows.value
-  if (keyword.value.trim()) {
-    const kw = keyword.value.trim().toLowerCase()
-    list = list.filter((r) => r.title.toLowerCase().includes(kw))
-  }
-  return list
-})
-const pagedRows = computed(() =>
-  filtered.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize)
-)
+function titleHtml(row) {
+  const raw = highlights.value[row.id] || row.title || ''
+  return String(raw).replace(/<(?!\/?em\b)[^>]*>/gi, '')
+}
 
 function statusLabel(s) {
   if (s === 'OPEN') return '开抢中'
@@ -145,15 +153,13 @@ function fmt(ms) {
   return `${h}小时${m % 60}分`
 }
 
-function applyFilter() {}
-
 function enter(row) {
+  if (row.status === 'OPEN' && !loggedIn.value) {
+    ElMessage.warning('请先登录')
+    router.push({ path: '/login', query: { redirect: `/seckill/activity/${row.id}` } })
+    return
+  }
   if (row.status === 'OPEN') {
-    if (!isLoggedIn()) {
-      ElMessage.info('请先登录后再抢购')
-      router.push({ path: '/login', query: { redirect: `/seckill/activity/${row.id}` } })
-      return
-    }
     router.push(`/seckill/activity/${row.id}`)
     return
   }
@@ -168,22 +174,58 @@ function onLogout() {
 async function load() {
   loading.value = true
   try {
-    const res = await getMallList()
+    const res = await searchMall({
+      q: keyword.value.trim(),
+      status: filter.value || undefined,
+      page: currentPage.value,
+      size: pageSize
+    })
     if (res.code !== 0) {
       ElMessage.error(res.message || '加载失败')
       return
     }
-    rows.value = res.data || []
+    const data = res.data || {}
+    const items = data.items || []
+    const map = {}
+    rows.value = items.map((hit) => {
+      const item = hit.item || hit
+      if (hit.highlightedTitle) map[item.id] = hit.highlightedTitle
+      return item
+    })
+    highlights.value = map
+    total.value = data.total || 0
   } finally {
     loading.value = false
   }
 }
 
+function loadNow() {
+  clearTimeout(debounceTimer)
+  load()
+}
+
+function scheduleLoad() {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(load, 280)
+}
+
+watch([keyword, filter], () => {
+  if (currentPage.value !== 1) {
+    currentPage.value = 1
+    return
+  }
+  scheduleLoad()
+})
+watch(currentPage, scheduleLoad)
+
 onMounted(() => {
   load()
   timer = setInterval(() => { now.value = Date.now() }, 500)
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  clearTimeout(debounceTimer)
+})
 </script>
 
 <style scoped>
@@ -255,6 +297,11 @@ onUnmounted(() => clearInterval(timer))
   text-overflow: ellipsis;
   margin-bottom: 8px;
   cursor: pointer;
+}
+.goods-title :deep(em) {
+  color: #b86b3d;
+  font-style: normal;
+  font-weight: 700;
 }
 .price-row {
   display: flex;

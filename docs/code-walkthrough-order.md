@@ -14,7 +14,7 @@
 | B 端 | `apps/web` | 80→NodePort 30080 | 登录、商城浏览、活动运营、抢购、订单支付/取消 |
 | 网关 | `seckill-gateway` | 8080 | 拦内部接口、限流、JWT、禁用名单、注入 `X-User-*`，按路径转发 |
 | 用户 | `seckill-user` | 8081 | 注册/登录/JWT、用户管理；禁用账号写 Redis |
-| 活动 | `seckill-activity` | 8082 | 活动状态机、预热、开/关抢、Redis 库存、商城公开接口 |
+| 活动 | `seckill-activity` | 8082 | 活动状态机、预热、开/关抢、Redis 库存、商城公开接口与 ES 搜索 |
 | 秒杀 | `seckill-core` | 8083 | 布隆 → Redis Lua 预扣 → 建单投递 |
 | 订单 | `seckill-order` | 8084 | 幂等落库、支付、取消、过期 |
 | 公共 | `seckill-common` | — | `Result`、MQ 消息体、Redis Key、布隆、功能开关 |
@@ -102,7 +102,7 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `l
 
 ### 4.2 商城（`Mall.vue`）
 
-卡片网格，共用静态 `/product.svg`；秒杀价 + 划线原价 + 折扣 + 倒计时 + 已抢进度；支持搜索/状态筛选/分页。未登录可逛；开抢中点「立即抢购」需登录后进会场，其它状态进公开详情 `/mall/:id`。数据来自公开 `GET /api/mall/list`（含 `soldCount`、`limitPerUser`）。
+卡片网格，共用静态 `/product.svg`；秒杀价 + 划线原价 + 折扣 + 倒计时 + 已抢进度；搜索走 `GET /api/mall/search`（Elasticsearch，失败则 activity 降级 MySQL LIKE）；状态筛选与分页在服务端。未登录可逛；开抢中点「立即抢购」需登录后进会场，其它状态进公开详情 `/mall/:id`。列表仍保留 `GET /api/mall/list`。详见 [elasticsearch.md](./elasticsearch.md)。
 
 ### 4.3 HTTP（`api.js`）
 
@@ -154,14 +154,15 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 
 ---
 
-## 8. 开关（`SeckillFeatureProperties`）
+## 8. 开关（`SeckillFeatureProperties` + `MallSearchProperties`）
 
 | 开关 | 关 | 开 |
 |---|---|---|
 | `seckill.mq.enabled` | core HTTP 同步建单；不注册 Listener；排除 RocketMQ 自动配置 | RocketMQ 异步建单 + 延迟关单/关抢 |
 | `seckill.schedule.enabled` | 不注册扫表/对账 Job | 订单过期扫表 + 活动到期扫表 + 库存对账 |
+| `seckill.search.elasticsearch.enabled` | 商城搜索走 MySQL LIKE | ES 倒排 + 高亮；失败仍降级 LIKE |
 
-环境变量：`SECKILL_MQ_ENABLED` / `SECKILL_SCHEDULE_ENABLED` / `SECKILL_MQ_AUTOCONFIG_EXCLUDE`。
+环境变量：`SECKILL_MQ_ENABLED` / `SECKILL_SCHEDULE_ENABLED` / `SECKILL_MQ_AUTOCONFIG_EXCLUDE` / `SECKILL_SEARCH_ES_ENABLED` / `ELASTICSEARCH_URIS`。
 
 ---
 
@@ -172,9 +173,10 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 3. `SeckillRedisKeys` + `ActivityBloomFilter` + `StockLuaExecutor`
 4. `SeckillService` + `OrderCreateClient`
 5. `OrderService.createFromMessage` / `pay` / `cancel`（`casStatus`）
-6. `ActivityService.preheat` / `open` / `doClose` / `delete`
-7. `UserDisabledStore` + `UserDisabledFlagSyncRunner`
-8. MQ 开时再看 `OrderCreateListener`、`OrderExpireListener`、`OrderMqConstants`
+6. `ActivityService.preheat` / `open` / `doClose` / `delete` / `searchForMall`
+7. `MallActivityIndex` + [elasticsearch.md](./elasticsearch.md)
+8. `UserDisabledStore` + `UserDisabledFlagSyncRunner`
+9. MQ 开时再看 `OrderCreateListener`、`OrderExpireListener`、`OrderMqConstants`
 
 ---
 

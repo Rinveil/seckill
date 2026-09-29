@@ -24,6 +24,7 @@
 | `SECKILL_MQ_ENABLED` | `true` | 抢购走 RocketMQ 异步建单；投延迟关单/关抢 |
 | `SECKILL_SCHEDULE_ENABLED` | `true` | 订单过期扫表、活动到期扫表、库存对账定时任务 |
 | `SECKILL_MQ_AUTOCONFIG_EXCLUDE` | `""` | 不排除 RocketMQ 自动配置 |
+| `SECKILL_SEARCH_ES_ENABLED` | `true` | 商城搜索走 Elasticsearch；失败降级 MySQL LIKE |
 
 ## 4. 资源配置（K8s limits）
 
@@ -33,15 +34,16 @@
 | rocketmq-namesrv | 1 | -Xms128m -Xmx256m | 256Mi | 512Mi |
 | mysql | 1 | — | 192Mi | 384Mi |
 | redis | 1 | — | 32Mi | 128Mi |
+| elasticsearch | 1 | -Xms512m -Xmx512m | 768Mi | 1536Mi |
 | seckill-user | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-activity | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-core | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-order | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-gateway | 1 | -Xms128m -Xmx256m | 128Mi | 384Mi |
 | seckill-web | 1 | — | 32Mi | 128Mi |
-| **合计 limits** | | | | **~5.1 GiB** |
+| **合计 limits** | | | | **~6.6 GiB** |
 
-实际占用约 **2.5–3.5 GiB**，Docker 8GB 内有余量。Broker 曾 OOM，limit 已提到 2Gi。
+实际占用约 **3.5–4.5 GiB**，Docker 8GB 内偏紧但仍可跑。Broker 曾 OOM，limit 已提到 2Gi。ES 单节点无副本，搜索挂了商城会降级 MySQL。
 
 ## 5. 跨机访问（同 WiFi）
 

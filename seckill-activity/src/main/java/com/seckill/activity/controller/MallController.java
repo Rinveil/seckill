@@ -1,11 +1,13 @@
 package com.seckill.activity.controller;
 
+import com.seckill.activity.dto.MallSearchPage;
 import com.seckill.activity.dto.MallView;
 import com.seckill.activity.service.ActivityService;
 import com.seckill.common.result.Result;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -26,6 +28,16 @@ public class MallController {
     @GetMapping("/list")
     public Result<List<MallView>> list() {
         return Result.ok(activityService.listForMall());
+    }
+
+    @GetMapping("/search")
+    public Result<MallSearchPage> search(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "8") int size
+    ) {
+        return Result.ok(activityService.searchForMall(q, status, page, size));
     }
 
     @GetMapping("/{id}")

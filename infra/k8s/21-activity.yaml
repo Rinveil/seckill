@@ -47,6 +47,10 @@ spec:
               value: "true"
             - name: SECKILL_MQ_AUTOCONFIG_EXCLUDE
               value: ""
+            - name: SECKILL_SEARCH_ES_ENABLED
+              value: "true"
+            - name: ELASTICSEARCH_URIS
+              value: http://elasticsearch:9200
           resources:
             requests:
               memory: 128Mi

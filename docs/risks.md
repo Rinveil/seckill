@@ -16,7 +16,8 @@
 | 关抢竞态 | `expireIfOpen` 仅当仍 OPEN；MQ 延迟 + 扫表；MQ 关时本机 `TaskScheduler` |
 | 布隆误杀 | `ready` 缺失 fail-open；重建 tmp+RENAME |
 | 禁用账号 | Redis `seckill:user:disabled:{id}`，网关验签后拒绝；Redis 异常 fail-open |
-| 商城不漏草稿 | `listForMall` / `detailForMall` 排除 DRAFT |
+| 商城不漏草稿 | `listForMall` / `detailForMall` / 搜索索引均排除 DRAFT |
+| 商城搜索 | ES 倒排；失败 LIKE 降级；不参与抢购热路径 |
 | 限流 IP | nginx 写 `X-Real-IP=$remote_addr`，不信任客户端 XFF 首段；body `code=1002` |
 
 ## 2. 热路径竞态（现状）
@@ -31,7 +32,8 @@
 | — | MQ 关且扫表关 | **已修**：建单/开抢时本机延迟关单/关抢 |
 | 低 | 布隆假阳性 | 仍进 Lua，可接受 |
 | 低 | 限流单机内存 | 单副本演示可接受；多副本不共享桶 |
-| 低 | Redis 禁用名单异常 | 网关 fail-open，短暂仍可能放行 |
+| 低 | ES 与 MySQL 短暂不一致 | 双写失败只打日志；启动重建；搜索允许旧数据 |
+| 低 | ES 单节点内存 | limit 1.5Gi；挂了降级 LIKE，抢购不受影响 |
 
 ## 3. 未做（有意后置或演示范围）
 

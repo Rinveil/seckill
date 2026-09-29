@@ -22,6 +22,6 @@
 | 12 | 轻量压测 | 已归档，不再做 |
 | 13 | 真实支付 | **后置，未做** |
 
-编号外已做：公开商城、网关抢购限流、活动布隆、数据看板、前端克隆表单、可配 `limitPerUser`。
+编号外已做：公开商城、网关抢购限流、活动布隆、数据看板、前端克隆表单、可配 `limitPerUser`、**Elasticsearch 商城搜索**。
 
-未做（有意后置）：真实支付。其余原缺口见 [risks.md](./risks.md)（内部建单、支付 CAS、限购 Redis、禁用 Token、限流 IP 已修）。
+未做（有意后置）：真实支付。其余原缺口见 [risks.md](./risks.md)（内部建单、支付 CAS、限购 Redis、禁用 Token、限流 IP 已修）。面试口径见 [elasticsearch.md](./elasticsearch.md)。

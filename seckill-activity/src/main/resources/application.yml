@@ -27,6 +27,10 @@ seckill:
     enabled: ${SECKILL_MQ_ENABLED:false}
   schedule:
     enabled: ${SECKILL_SCHEDULE_ENABLED:false}
+  search:
+    elasticsearch:
+      enabled: ${SECKILL_SEARCH_ES_ENABLED:false}
+      uris: ${ELASTICSEARCH_URIS:http://elasticsearch:9200}
   activity:
     expire-scan-ms: ${ACTIVITY_EXPIRE_SCAN_MS:30000}
     reconcile-scan-ms: ${ACTIVITY_RECONCILE_SCAN_MS:60000}
@@ -48,6 +52,8 @@ management:
       probes:
         enabled: true
   health:
+    elasticsearch:
+      enabled: false
     livenessstate:
       enabled: true
     readinessstate:

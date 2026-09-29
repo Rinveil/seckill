@@ -15,6 +15,7 @@
 | 数据 | 共享 **一个 MySQL**；中间件 **PVC 持久化**；业务库访问统一 **MyBatis-Plus** |
 | 鉴权 | **JWT**（网关本地验签，TTL 默认 2h）；Redis **不做** Session |
 | Redis | 库存预扣、已购标记、开抢活动布隆（防 ID 穿透）；B 端改库存 **直接改 Redis**（仅 PREHEATED） |
+| 搜索 | Elasticsearch 单节点；只搜商城活动标题；MySQL 仍是真相源；挂了降级 LIKE |
 | 后置 | 真实支付（未做；Mock 固定成功） |
 
 ## 2. 产品约定（账号 / 活动 / 订单）
@@ -61,7 +62,7 @@
    /    |     |     \
  user activity core order
    \    |     |     /
-  共享 MySQL(PVC)  Redis(库存)  RocketMQ（可用 seckill.mq.enabled 关闭）
+  共享 MySQL(PVC)  Redis(库存)  RocketMQ  Elasticsearch（商城搜索）
 ```
 
 | 模块 | 职责 |
@@ -69,7 +70,7 @@
 | `apps/web` | 登录注册、商城浏览、活动/订单/用户管理、数据看板、预热、自测抢购、Mock 支付 |
 | `seckill-gateway` | 路由、CORS、JWT 校验与用户透传、抢购 IP 限流 |
 | `seckill-user` | 注册(USER)、登录、种子 ADMIN、`/me`、**用户管理（ADMIN）**、签发 JWT |
-| `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账；商城公开接口 |
+| `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账；商城公开接口与 ES 搜索 |
 | `seckill-core` | 布隆拦截无效活动 ID；Redis Lua 预扣（`limitPerUser`）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
 | `seckill-order` | MQ/同步幂等建单；Mock 支付；超时关单（MQ 延迟或扫表，均可开关）；取消回滚 |
 | `infra` | K8s（NodePort、PVC、arm64 镜像） |
@@ -95,14 +96,15 @@
 活动到期/手动关：OPEN→CLOSED（终态）→ 删 Redis open、重建布隆；不可再预热开抢
 ```
 
-### 功能开关（`seckill.mq` / `seckill.schedule`）
+### 功能开关（`seckill.mq` / `seckill.schedule` / `seckill.search.elasticsearch`）
 
 | 开关 | 关闭时行为 |
 |---|---|
 | `seckill.mq.enabled=false` | 抢购 HTTP 同步调 order `/api/order/internal/create`（不经网关）；不注册 MQ Listener；关单/关抢改本机 `TaskScheduler`；排除 RocketMQ 自动配置 |
 | `seckill.schedule.enabled=false` | 不注册订单过期扫表、活动到期扫表、库存对账 Job（本机延迟仍在） |
+| `seckill.search.elasticsearch.enabled=false` | 商城搜索走 MySQL LIKE；不连 ES（见 [elasticsearch.md](./elasticsearch.md)） |
 
-本机 `application.yml` 默认两开关为 **false**。**当前 K8s 为 true**。  
+本机 `application.yml` 默认 MQ/扫表/ES 均为 **false**。**当前 K8s 均为 true**。  
 重新开启 MQ：`SECKILL_MQ_ENABLED=true`、`SECKILL_SCHEDULE_ENABLED=true`，RocketMQ replicas=1。
 
 ## 6. 部署形态
@@ -110,7 +112,7 @@
 - Namespace：`seckill`；镜像 **linux/arm64**，tag `0.1.0`  
 - Docker 内存约 **8GB**；JVM 建议 256MB/服务（Broker limit **2Gi**）  
 - **NodePort 30080**；`/api` → gateway  
-- MySQL / Redis / RocketMQ Broker 使用 **PVC**  
+- MySQL / Redis / RocketMQ Broker / Elasticsearch 使用 **PVC**  
 - 集群内 Service DNS；禁止业务代码写 `127.0.0.1`  
 - 本机部署：`./infra/scripts/deploy-local.sh`，见 [ci-cd.md](./ci-cd.md)、[deploy-plan.md](./deploy-plan.md)
 
@@ -144,6 +146,7 @@
 10. RocketMQ 延迟关单/关抢 + 扫表兜底 + 库存对账 — **已完成**  
 11. 用户管理（列表/创建/启停/改角色/重置密码）— **已完成**  
 12. 轻量压测（已归档，以后不再做）— [test-report.md](./test-report.md)  
-13. （后置）真实支付 — **未做**
+13. （后置）真实支付 — **未做**  
+14. Elasticsearch 商城搜索 — **已完成**（见 [elasticsearch.md](./elasticsearch.md)）
 
 编号外已做：网关抢购 IP 限流、公开商城 API、活动布隆。
