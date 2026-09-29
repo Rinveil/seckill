@@ -17,7 +17,12 @@ public class ElasticsearchConfig {
     @Bean(destroyMethod = "close")
     @ConditionalOnProperty(prefix = "seckill.search.elasticsearch", name = "enabled", havingValue = "true")
     public RestClient elasticsearchRestClient(MallSearchProperties properties) {
-        return RestClient.builder(HttpHost.create(properties.uris().trim())).build();
+        return RestClient.builder(HttpHost.create(properties.uris().trim()))
+                .setRequestConfigCallback(req -> req
+                        .setConnectTimeout(1000)
+                        .setSocketTimeout(3000)
+                        .setConnectionRequestTimeout(1000))
+                .build();
     }
 
     @Bean

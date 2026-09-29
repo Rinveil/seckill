@@ -43,7 +43,7 @@
 | seckill-web | 1 | — | 32Mi | 128Mi |
 | **合计 limits** | | | | **~6.6 GiB** |
 
-实际占用约 **3.5–4.5 GiB**，Docker 8GB 内偏紧但仍可跑。Broker 曾 OOM，limit 已提到 2Gi。ES 单节点无副本，搜索挂了商城会降级 MySQL。
+实际占用约 **3.5–4.5 GiB**，Docker 8GB 内偏紧但仍可跑。Broker 曾 OOM，limit 已提到 2Gi。ES 单节点无副本（演示取舍）；搜索超时降级 MySQL，启动与 120s 对账对齐索引。
 
 ## 5. 跨机访问（同 WiFi）
 

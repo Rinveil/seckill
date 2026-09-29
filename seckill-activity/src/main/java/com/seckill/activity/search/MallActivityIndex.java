@@ -15,7 +15,9 @@ import java.io.StringReader;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Component
 public class MallActivityIndex {
@@ -24,6 +26,7 @@ public class MallActivityIndex {
     private static final Logger log = LoggerFactory.getLogger(MallActivityIndex.class);
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+    private static final int STALE_SCAN_SIZE = 1000;
 
     private static final String INDEX_BODY = """
             {
@@ -101,19 +104,11 @@ public class MallActivityIndex {
             delete(activity.getId());
             return;
         }
-        upsert(activity);
+        runWithRetry("upsert mall index", () -> upsert(activity, Refresh.WaitFor), activity.getId());
     }
 
     public void delete(long id) {
-        ElasticsearchClient es = requireClient();
-        if (es == null) {
-            return;
-        }
-        try {
-            es.delete(d -> d.index(INDEX).id(String.valueOf(id)).refresh(Refresh.WaitFor));
-        } catch (Exception ex) {
-            log.warn("delete mall index doc failed, id={}", id, ex);
-        }
+        runWithRetry("delete mall index doc", () -> deleteOnce(id, Refresh.WaitFor), id);
     }
 
     public void reindex(List<Activity> activities) {
@@ -122,14 +117,23 @@ public class MallActivityIndex {
             return;
         }
         ensureIndex();
+        Set<Long> keep = new HashSet<>();
         int n = 0;
         for (Activity activity : activities) {
-            if (activity != null && !isDraft(activity)) {
-                upsert(activity);
+            if (activity == null || activity.getId() == null || isDraft(activity)) {
+                continue;
+            }
+            try {
+                upsert(activity, Refresh.False);
+                keep.add(activity.getId());
                 n++;
+            } catch (Exception ex) {
+                log.warn("reindex upsert failed, id={}", activity.getId(), ex);
             }
         }
-        log.info("reindexed {} mall activities", n);
+        int removed = deleteStale(keep);
+        refreshQuietly();
+        log.info("reindexed {} mall activities, removedStale={}", n, removed);
     }
 
     public SearchPage search(String keyword, String status, int from, int size) {
@@ -143,6 +147,7 @@ public class MallActivityIndex {
                 s.index(INDEX).from(from).size(size).trackTotalHits(t -> t.enabled(true));
                 s.sort(so -> so.field(f -> f.field("id").order(SortOrder.Desc)));
                 s.query(qb -> qb.bool(b -> {
+                    b.mustNot(mn -> mn.term(t -> t.field("status").value("DRAFT")));
                     if (q.isEmpty()) {
                         b.must(m -> m.matchAll(ma -> ma));
                     } else {
@@ -182,17 +187,98 @@ public class MallActivityIndex {
         }
     }
 
-    private void upsert(Activity activity) {
+    private void upsert(Activity activity, Refresh refresh) throws Exception {
         ElasticsearchClient es = requireClient();
         if (es == null) {
             return;
         }
         MallActivityDocument doc = toDoc(activity);
-        try {
-            es.index(i -> i.index(INDEX).id(String.valueOf(doc.id())).document(doc).refresh(Refresh.WaitFor));
-        } catch (Exception ex) {
-            log.warn("upsert mall index failed, id={}", doc.id(), ex);
+        es.index(i -> i.index(INDEX).id(String.valueOf(doc.id())).document(doc).refresh(refresh));
+    }
+
+    private void deleteOnce(long id, Refresh refresh) throws Exception {
+        ElasticsearchClient es = requireClient();
+        if (es == null) {
+            return;
         }
+        es.delete(d -> d.index(INDEX).id(String.valueOf(id)).refresh(refresh));
+    }
+
+    private int deleteStale(Set<Long> keep) {
+        ElasticsearchClient es = requireClient();
+        if (es == null) {
+            return 0;
+        }
+        try {
+            SearchResponse<MallActivityDocument> resp = es.search(s -> s
+                    .index(INDEX)
+                    .from(0)
+                    .size(STALE_SCAN_SIZE)
+                    .source(src -> src.filter(f -> f.includes("id")))
+                    .query(q -> q.matchAll(m -> m))
+                    .trackTotalHits(t -> t.enabled(true)), MallActivityDocument.class);
+            if (resp.hits().total() != null && resp.hits().total().value() > STALE_SCAN_SIZE) {
+                log.warn("mall index has more than {} docs, stale delete this round is partial", STALE_SCAN_SIZE);
+            }
+            int removed = 0;
+            for (Hit<MallActivityDocument> hit : resp.hits().hits()) {
+                long id;
+                try {
+                    id = Long.parseLong(hit.id());
+                } catch (NumberFormatException ex) {
+                    continue;
+                }
+                if (!keep.contains(id)) {
+                    try {
+                        deleteOnce(id, Refresh.False);
+                        removed++;
+                    } catch (Exception ex) {
+                        log.warn("delete stale mall doc failed, id={}", id, ex);
+                    }
+                }
+            }
+            return removed;
+        } catch (Exception ex) {
+            log.warn("scan stale mall docs failed", ex);
+            return 0;
+        }
+    }
+
+    private void refreshQuietly() {
+        ElasticsearchClient es = requireClient();
+        if (es == null) {
+            return;
+        }
+        try {
+            es.indices().refresh(r -> r.index(INDEX));
+        } catch (Exception ex) {
+            log.warn("refresh mall index failed", ex);
+        }
+    }
+
+    private void runWithRetry(String action, EsCall call, long id) {
+        if (requireClient() == null) {
+            return;
+        }
+        Exception last = null;
+        for (int i = 0; i < 2; i++) {
+            try {
+                call.run();
+                return;
+            } catch (Exception ex) {
+                last = ex;
+                if (i == 0) {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        log.warn("{} interrupted, id={}", action, id, ie);
+                        return;
+                    }
+                }
+            }
+        }
+        log.warn("{} failed after retry, id={}", action, id, last);
     }
 
     private MallActivityDocument toDoc(Activity activity) {
@@ -231,6 +317,11 @@ public class MallActivityIndex {
             case Activity.STATUS_CLOSED -> "CLOSED";
             default -> "DRAFT";
         };
+    }
+
+    @FunctionalInterface
+    private interface EsCall {
+        void run() throws Exception;
     }
 
     public record HitRow(long id, String highlightedTitle) {

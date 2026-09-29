@@ -102,7 +102,7 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `l
 
 ### 4.2 商城（`Mall.vue`）
 
-卡片网格，共用静态 `/product.svg`；秒杀价 + 划线原价 + 折扣 + 倒计时 + 已抢进度；搜索走 `GET /api/mall/search`（Elasticsearch，失败则 activity 降级 MySQL LIKE）；状态筛选与分页在服务端。未登录可逛；开抢中点「立即抢购」需登录后进会场，其它状态进公开详情 `/mall/:id`。列表仍保留 `GET /api/mall/list`。详见 [elasticsearch.md](./elasticsearch.md)。
+卡片网格，共用静态 `/product.svg`；秒杀价 + 划线原价 + 折扣 + 倒计时 + 已抢进度；搜索走 `GET /api/mall/search`（Elasticsearch，超时/失败则 activity 降级 MySQL LIKE）；状态筛选与分页在服务端。未登录可逛；开抢中点「立即抢购」需登录后进会场，其它状态进公开详情 `/mall/:id`。列表仍保留 `GET /api/mall/list`。详见 [elasticsearch.md](./elasticsearch.md)。
 
 ### 4.3 HTTP（`api.js`）
 
@@ -159,10 +159,10 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 | 开关 | 关 | 开 |
 |---|---|---|
 | `seckill.mq.enabled` | core HTTP 同步建单；不注册 Listener；排除 RocketMQ 自动配置 | RocketMQ 异步建单 + 延迟关单/关抢 |
-| `seckill.schedule.enabled` | 不注册扫表/对账 Job | 订单过期扫表 + 活动到期扫表 + 库存对账 |
-| `seckill.search.elasticsearch.enabled` | 商城搜索走 MySQL LIKE | ES 倒排 + 高亮；失败仍降级 LIKE |
+| `seckill.schedule.enabled` | 不注册扫表/对账 Job | 订单过期扫表 + 活动到期扫表 + 库存对账 + ES 索引对账 |
+| `seckill.search.elasticsearch.enabled` | 商城搜索走 MySQL LIKE | ES 倒排 + 高亮；超时/失败仍降级 LIKE |
 
-环境变量：`SECKILL_MQ_ENABLED` / `SECKILL_SCHEDULE_ENABLED` / `SECKILL_MQ_AUTOCONFIG_EXCLUDE` / `SECKILL_SEARCH_ES_ENABLED` / `ELASTICSEARCH_URIS`。
+环境变量：`SECKILL_MQ_ENABLED` / `SECKILL_SCHEDULE_ENABLED` / `SECKILL_MQ_AUTOCONFIG_EXCLUDE` / `SECKILL_SEARCH_ES_ENABLED` / `ELASTICSEARCH_URIS` / `SECKILL_SEARCH_ES_RECONCILE_MS`。
 
 ---
 
@@ -174,7 +174,7 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 4. `SeckillService` + `OrderCreateClient`
 5. `OrderService.createFromMessage` / `pay` / `cancel`（`casStatus`）
 6. `ActivityService.preheat` / `open` / `doClose` / `delete` / `searchForMall`
-7. `MallActivityIndex` + [elasticsearch.md](./elasticsearch.md)
+7. `MallActivityIndex` / `MallIndexReconciler` / `MallIndexReconcileJob` + [elasticsearch.md](./elasticsearch.md)
 8. `UserDisabledStore` + `UserDisabledFlagSyncRunner`
 9. MQ 开时再看 `OrderCreateListener`、`OrderExpireListener`、`OrderMqConstants`
 
@@ -191,3 +191,4 @@ Lua（`StockLuaExecutor.java`）：`open!=1`→-3；`bought >= limit`→-1；`st
 5. 活动手动关 vs 到期关：非 OPEN 则跳过；MQ 延迟 + 扫表；MQ 关则本机定时；关时重建布隆
 6. 无效 `activityId`：布隆先挡；假阳性或未就绪走 Lua
 7. 禁用账号：user 写 `seckill:user:disabled:{id}`，网关验签后拒绝；Redis 异常 fail-open
+8. 商城搜索：双写失败不回滚活动；重试 + 启动/120s 对账；ES 超时 LIKE；深分页直接拒

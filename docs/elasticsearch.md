@@ -13,12 +13,12 @@
 | 职责 | 活动标题检索、状态过滤、分页、高亮 |
 | 真相源 | **MySQL `t_activity`**；ES 是衍生索引 |
 | 可见范围 | 只索引 PREHEATED / OPEN / CLOSED；**DRAFT 不进索引** |
-| 写入 | 活动 create/update/preheat/open/close/delete 后双写；启动全量重建 |
+| 写入 | 活动写库后双写（失败重试 1 次，**不回滚活动**）；启动 + 定时对账覆盖索引 |
 | 查询 | `GET /api/mall/search?q=&status=&page=&size=` |
-| 降级 | ES 不可用 → MySQL `LIKE`（数据量小可接受） |
+| 降级 | ES 超时/异常 → MySQL `LIKE`（RestClient 连接 1s / 读 3s） |
 | 中文分词 | 演示用 **ngram(1–2)**，不装 IK。生产应上 IK / ICU |
 | 开关 | `SECKILL_SEARCH_ES_ENABLED`（K8s true；裸起 Java 默认 false） |
-| 不做 | 搜索用户/订单、建议词、聚合看板、Canal、ES 参与扣库存 |
+| 不做 | 搜索用户/订单、建议词、聚合看板、Canal、ES 参与扣库存、IK 自定义镜像 |
 
 资源（本机 Docker 8GB）：堆 **512MB**，Pod limit **1536Mi**。`node.store.allow_mmap=false`，避免 Desktop K8s 的 `vm.max_map_count` 坑。
 
@@ -74,19 +74,26 @@
 
 Lucene 先写 buffer，`refresh`（默认 1s）后才能被搜到。不是 MySQL 那种提交即可见。
 
-面试：双写后立刻搜可能搜不到刚预热的活动 → 可 `refresh=wait_for`（本项目 upsert 用 wait_for，演示可接受；高写量不要每条 wait）。
+本项目：运营单条 upsert/delete 用 `refresh=wait_for`，改完立刻能搜到。启动/定时全量重建用 `refresh=false`，全部写完再 `indices.refresh` 一次，避免 N 条活动刷 N 次。高写量生产也不要每条 wait。
 
 ---
 
 ## 7. 一致性：MySQL 与 ES 怎么对齐
 
-常见三种，本项目用第一种：
+常见三种，本项目用第一种，并加了重试和对账：
 
 | 方案 | 做法 | 取舍 |
 |---|---|---|
-| **应用双写**（本项目） | 活动写库成功后再 index/delete | 实现简单；ES 失败只打日志，靠启动重建兜底 |
-| 事务消息 / Outbox | 同一本地事务写 binlog 表再消费 | 更可靠，代码重 |
+| **应用双写**（本项目） | 活动写库成功后再 index/delete；失败再试 1 次 | 实现简单；仍 **不回滚活动** |
+| 事务消息 / Outbox | 同一本地事务写 outbox 再消费 | 更可靠，代码重 |
 | Canal / Debezium | 听 MySQL binlog | 解耦好，运维多 |
+
+本仓库兜底（对照代码）：
+
+1. 双写失败只打日志，活动事务已提交  
+2. 启动 `MallIndexSyncRunner` 全量覆盖  
+3. `seckill.schedule.enabled=true` 时 `MallIndexReconcileJob` 每 120s 再覆盖，并删掉 ES 里已不该存在的文档（DRAFT / 已删）  
+4. 查询侧 `must_not status=DRAFT`，hydrate 再用 MySQL 丢掉草稿/已删行  
 
 口述：搜索允许短暂不一致；库存不允许。所以搜索双写失败 **不能回滚活动**。
 
@@ -99,7 +106,7 @@ Lucene 先写 buffer，`refresh`（默认 1s）后才能被搜到。不是 MySQL
 | 本项目 | 库存预扣、限购、布隆、禁用名单 | 商城标题搜索 | 活动/订单/用户真相 |
 | 擅长 | 极低延迟 KV、原子计数 | 全文、相关度 | 事务、关系 |
 
-不要用 Redis 做全文（SCAN + 包含），不要用 ES 做秒杀库存。
+不要用 Redis 做全文（SCAN + 包含），不要用 ES 做秒杀库存。已抢件数不进 ES，卡片上的 soldCount 在 hydrate 时用 Redis `init - stock` 算。
 
 ---
 
@@ -112,16 +119,24 @@ Lucene 先写 buffer，`refresh`（默认 1s）后才能被搜到。不是 MySQL
 
 ## 10. 故障与降级（对照代码）
 
-- 单节点：无副本，Pod 没了要等重建（PVC 还在则数据还在）  
-- activity 探针 **不绑 ES**，避免搜索挂了整条运营链路  
-- `searchForMall`：ES 异常 → MySQL LIKE  
-- 抢购链路零依赖 ES  
+| 风险 | 落地 |
+|---|---|
+| 双写失败留下旧标题 | 重试 1 次 + 启动/120s 对账覆盖；不回滚活动 |
+| ES 里残留 DRAFT/已删 | 对账按 MySQL 可见 ID 删多余文档；查询 `must_not DRAFT`；hydrate 再滤一层 |
+| 全量重建每条 wait_for | 单条运营写才 wait_for；reindex 批量 false + 一次 refresh |
+| ES 挂了拖死商城 | RestClient 连接 1s / 读 3s；异常走 MySQL LIKE；activity 探针不绑 ES |
+| 深分页打爆协调节点 | `from+size≤200` 直接拒 |
+| 循环查库补卡片 | hydrate 一次 `IN (ids)`，禁止逐条 `selectById` |
+| 单节点无副本 | **演示取舍**：replicas=0 + PVC；Pod 没了等拉起，搜索降级 LIKE，抢购不受影响。Docker 8GB 不加第二节点 |
+| ngram 索引膨胀 | **有意后置**：短标题演示够用；生产换 IK，不在本仓库打自定义 ES 镜像 |
+
+抢购链路零依赖 ES。
 
 ---
 
 ## 11. 60 秒口述稿
 
-> 商城搜索用 ES 倒排做标题检索和高亮，MySQL 仍是活动主库。写路径是应用双写，DRAFT 不进索引。读路径 search API，挂了降级 LIKE。抢购走 Redis Lua，不经过 ES。演示分词用 ngram，生产会换成 IK。深分页我们直接禁掉。
+> 商城搜索用 ES 倒排做标题检索和高亮，MySQL 仍是活动主库。写路径是应用双写，失败重试一次且不回滚活动，靠启动和定时对账对齐。DRAFT 不进索引。读路径 search API，超时 3 秒降级 LIKE。抢购走 Redis Lua，不经过 ES。单条写 wait_for，全量重建集中 refresh。演示分词用 ngram，生产会换成 IK。深分页我们直接禁掉。
 
 ---
 
@@ -130,7 +145,11 @@ Lucene 先写 buffer，`refresh`（默认 1s）后才能被搜到。不是 MySQL
 | 文件 | 作用 |
 |---|---|
 | `infra/k8s/13-elasticsearch.yaml` | 单节点 ES |
-| `MallActivityIndex` | 建索引 / upsert / delete / search |
-| `ActivityService.searchForMall` | 编排 + 降级 + 用 DB 补 soldCount |
+| `ElasticsearchConfig` | RestClient 超时 |
+| `MallActivityIndex` | 建索引 / upsert / delete / search / 全量覆盖+删残留 |
+| `MallIndexReconciler` | 从 MySQL 拉可见活动再 reindex |
+| `MallIndexSyncRunner` | 启动对账 |
+| `MallIndexReconcileJob` | `schedule` 开时每 120s 对账 |
+| `ActivityService.searchForMall` | 编排 + 降级 + IN 查询补 soldCount |
 | `GET /api/mall/search` | 公开接口（须写在 `/{id}` 旁边，避免 path 冲突） |
 | `Mall.vue` | 防抖、服务端分页、高亮 |

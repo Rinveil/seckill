@@ -31,6 +31,7 @@ seckill:
     elasticsearch:
       enabled: ${SECKILL_SEARCH_ES_ENABLED:false}
       uris: ${ELASTICSEARCH_URIS:http://elasticsearch:9200}
+      reconcile-ms: ${SECKILL_SEARCH_ES_RECONCILE_MS:120000}
   activity:
     expire-scan-ms: ${ACTIVITY_EXPIRE_SCAN_MS:30000}
     reconcile-scan-ms: ${ACTIVITY_RECONCILE_SCAN_MS:60000}

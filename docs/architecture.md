@@ -15,7 +15,7 @@
 | 数据 | 共享 **一个 MySQL**；中间件 **PVC 持久化**；业务库访问统一 **MyBatis-Plus** |
 | 鉴权 | **JWT**（网关本地验签，TTL 默认 2h）；Redis **不做** Session |
 | Redis | 库存预扣、已购标记、开抢活动布隆（防 ID 穿透）；B 端改库存 **直接改 Redis**（仅 PREHEATED） |
-| 搜索 | Elasticsearch 单节点；只搜商城活动标题；MySQL 仍是真相源；挂了降级 LIKE |
+| 搜索 | Elasticsearch 单节点；双写重试 + 启动/定时对账；超时降级 LIKE；MySQL 仍是真相源 |
 | 后置 | 真实支付（未做；Mock 固定成功） |
 
 ## 2. 产品约定（账号 / 活动 / 订单）
@@ -70,7 +70,7 @@
 | `apps/web` | 登录注册、商城浏览、活动/订单/用户管理、数据看板、预热、自测抢购、Mock 支付 |
 | `seckill-gateway` | 路由、CORS、JWT 校验与用户透传、抢购 IP 限流 |
 | `seckill-user` | 注册(USER)、登录、种子 ADMIN、`/me`、**用户管理（ADMIN）**、签发 JWT |
-| `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账；商城公开接口与 ES 搜索 |
+| `seckill-activity` | 活动状态机；`end_at` 延迟+扫表关抢；库存对账；商城公开接口与 ES 搜索（双写+定时对账） |
 | `seckill-core` | 布隆拦截无效活动 ID；Redis Lua 预扣（`limitPerUser`）；`seckill.mq.enabled=true` 时 RocketMQ 投递，否则 HTTP 同步调 order 建单 |
 | `seckill-order` | MQ/同步幂等建单；Mock 支付；超时关单（MQ 延迟或扫表，均可开关）；取消回滚 |
 | `infra` | K8s（NodePort、PVC、arm64 镜像） |
@@ -101,7 +101,7 @@
 | 开关 | 关闭时行为 |
 |---|---|
 | `seckill.mq.enabled=false` | 抢购 HTTP 同步调 order `/api/order/internal/create`（不经网关）；不注册 MQ Listener；关单/关抢改本机 `TaskScheduler`；排除 RocketMQ 自动配置 |
-| `seckill.schedule.enabled=false` | 不注册订单过期扫表、活动到期扫表、库存对账 Job（本机延迟仍在） |
+| `seckill.schedule.enabled=false` | 不注册订单过期扫表、活动到期扫表、库存对账、ES 索引对账 Job（本机延迟仍在） |
 | `seckill.search.elasticsearch.enabled=false` | 商城搜索走 MySQL LIKE；不连 ES（见 [elasticsearch.md](./elasticsearch.md)） |
 
 本机 `application.yml` 默认 MQ/扫表/ES 均为 **false**。**当前 K8s 均为 true**。  
@@ -129,6 +129,7 @@
 | 中 | PREHEATED 改限购未再预热 | **已修**：更新时同步写 Redis `limit` |
 | 低 | 布隆假阳性 / fail-open | 假阳性进 Lua；`ready` 缺失不误杀真开抢 |
 | 低 | 限流单机 | 仅 `/api/seckill/**` 与登录注册；IP 取 nginx `X-Real-IP` |
+| — | ES 与 MySQL / 挂了拖慢 | **已修**：双写重试 + 定时对账；RestClient 超时 LIKE。单节点与 ngram 为演示取舍 |
 
 其它已按设计落地的：Lua 预扣与回滚同一语义；建单 `orderNo` 幂等；关抢与到期双保险；对账 `init ≈ redis + CREATED + PAID`（依赖预热写入的 init）。
 

@@ -17,7 +17,10 @@
 | 布隆误杀 | `ready` 缺失 fail-open；重建 tmp+RENAME |
 | 禁用账号 | Redis `seckill:user:disabled:{id}`，网关验签后拒绝；Redis 异常 fail-open |
 | 商城不漏草稿 | `listForMall` / `detailForMall` / 搜索索引均排除 DRAFT |
-| 商城搜索 | ES 倒排；失败 LIKE 降级；不参与抢购热路径 |
+| 商城搜索 | ES 倒排；RestClient 1s/3s 超时后 LIKE；探针不绑 ES；不参与抢购 |
+| ES 与 MySQL | 双写失败重试 1 次且不回滚活动；启动 + 120s 对账覆盖并删残留；查询滤 DRAFT |
+| ES 深分页 / hydrate | `from+size≤200`；命中 ID 一次 `IN` 再补 soldCount |
+| ES refresh | 单条 upsert `wait_for`；全量 reindex 不逐条 wait |
 | 限流 IP | nginx 写 `X-Real-IP=$remote_addr`，不信任客户端 XFF 首段；body `code=1002` |
 
 ## 2. 热路径竞态（现状）
@@ -32,8 +35,12 @@
 | — | MQ 关且扫表关 | **已修**：建单/开抢时本机延迟关单/关抢 |
 | 低 | 布隆假阳性 | 仍进 Lua，可接受 |
 | 低 | 限流单机内存 | 单副本演示可接受；多副本不共享桶 |
-| 低 | ES 与 MySQL 短暂不一致 | 双写失败只打日志；启动重建；搜索允许旧数据 |
-| 低 | ES 单节点内存 | limit 1.5Gi；挂了降级 LIKE，抢购不受影响 |
+| — | ES 双写失败 / 残留文档 | **已修**：重试 + 启动/定时对账删多余文档；查询与 hydrate 再滤 DRAFT |
+| — | ES 挂了拖慢商城 | **已修**：RestClient 超时后 LIKE；探针不绑 ES |
+| — | ES 深分页 / 循环查库 | **已修**：`from+size≤200`；hydrate `IN (ids)` |
+| 低 | 双写两次都失败 | 最多等到下一轮 120s 对账；搜索允许短暂旧数据 |
+| 低 | ES 单节点无副本 | **演示取舍**：replicas=0 + PVC + limit 1.5Gi；不加第二节点 |
+| 低 | ngram 索引膨胀 | **有意后置**：生产换 IK，本仓库不打自定义 ES 镜像 |
 
 ## 3. 未做（有意后置或演示范围）
 
@@ -43,13 +50,15 @@
 | 克隆 API | 前端表单拷贝即可 |
 | Java 单测套件 | 仍以本机 UI / `e2e-smoke.py` 为主 |
 | 分布式限流 | 单副本内存令牌桶 |
+| Canal / Outbox | 搜索双写+对账足够演示，不上 binlog 同步 |
+| IK 分词 | 演示 ngram；生产再打带插件的 ES 镜像 |
 
 ## 4. 配置事实
 
 | 项 | 事实 |
 |---|---|
-| `application.yml` 默认 | `seckill.mq/schedule.enabled=false`（裸起 Java） |
-| **当前 K8s** | 两开关均为 **true** |
+| `application.yml` 默认 | `seckill.mq/schedule/search.elasticsearch.enabled=false`（裸起 Java） |
+| **当前 K8s** | mq / schedule / search.elasticsearch 均为 **true** |
 | 关单 | RocketMQ 延迟（3 分钟 delayLevel=7）+ 扫表；MQ 关则本机定时 |
 | JWT | Bearer + localStorage；禁用账号另写 Redis 标记 |
 | 限流 | order `-110`，早于 JWT；登录/注册另桶 |
