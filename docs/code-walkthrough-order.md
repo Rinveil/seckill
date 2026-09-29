@@ -1,7 +1,8 @@
 # 代码导读：从前端到完整订单链路
 
 > 阅读顺序：先看总览与时序，再按「文件入口」跳进源码。  
-> **当前 K8s**：`seckill.mq.enabled=true`、`seckill.schedule.enabled=true`。`application.yml` 默认是 false（裸起 Java 才关）。  
+> **清单开关（`infra/k8s`）**：`seckill.mq.enabled=true`、`seckill.schedule.enabled=true`、`seckill.search.elasticsearch.enabled=true`。`application.yml` 默认是 false（裸起 Java 才关）。  
+> 本机暂停：退出 Docker Desktop，PVC 还在；再开 Docker 后等 Pod Ready，或跑 `./infra/scripts/deploy-local.sh`。  
 > 本文件须与 `main` 代码同步：每次 push 对照改动更新（见 `.cursor/rules/code-walkthrough-sync.mdc`）。  
 > 架构：[architecture.md](./architecture.md)；并发与缺口：[risks.md](./risks.md)。
 
@@ -18,6 +19,7 @@
 | 秒杀 | `seckill-core` | 8083 | 布隆 → Redis Lua 预扣 → 建单投递 |
 | 订单 | `seckill-order` | 8084 | 幂等落库、支付、取消、过期 |
 | 公共 | `seckill-common` | — | `Result`、MQ 消息体、Redis Key、布隆、功能开关 |
+| 搜索 | Elasticsearch 8.x | 9200 | 商城标题倒排；PVC；双写 + 定时对账；非抢购热路径 |
 
 HTTP 统一经前端同源 `/api/**`（nginx 反代到 gateway）。nginx 覆盖 `X-Real-IP` / `X-Forwarded-For` 为 `$remote_addr`，不信任浏览器自带 XFF。
 
@@ -95,7 +97,9 @@ Redis Key（`SeckillRedisKeys.java`）：`stock` / `open` / `bought:{user}` / `l
 | `/seckill/result` | `Result.vue` 抢购结果 + 去支付 | 登录 |
 | `/my/orders` | `MyOrders.vue` 我的订单 | 登录 |
 | `/ops/dashboard` | `Dashboard.vue` 数据看板 | ADMIN |
-| `/ops/*` | 运营管理 | ADMIN |
+| `/ops/activities` | `ActivityManage.vue` 活动管理 | ADMIN |
+| `/ops/orders` | `OrderManage.vue` 订单管理 | ADMIN |
+| `/ops/users` | `UserManage.vue` 用户管理 | ADMIN |
 
 运营侧栏 `AdminLayout`：运营区（看板 / 活动 / 订单 / 用户）+ 购物 + 商城首页。
 

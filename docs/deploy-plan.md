@@ -88,6 +88,8 @@ cd /Users/zheng/IdeaProjects/seckill
 kubectl -n seckill get pods              # 等全部 Ready
 ```
 
+暂停本机：退出 Docker Desktop（PVC 保留）。恢复：再开 Docker，等 Pod Ready。详见 [ci-cd.md](./ci-cd.md)。
+
 ## 8. 验证清单
 
 - [ ] 全部 Pod `1/1 Running`（含 rocketmq-broker/namesrv）

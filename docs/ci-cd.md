@@ -21,6 +21,11 @@
 入口：http://localhost:30080  
 前置：Docker Desktop 已启动且 Kubernetes Ready。
 
+## 暂停 / 恢复
+
+- **暂停**（省内存）：退出 Docker Desktop。Namespace `seckill` 的 PVC（MySQL / Redis / RocketMQ / ES）会留在 Docker 数据盘里。  
+- **恢复**：打开 Docker Desktop，等 Kubernetes Ready；Pod 会自己拉起。镜像丢了或改过代码再跑 `./infra/scripts/deploy-local.sh`。
+
 并发与实现缺口：[risks.md](./risks.md)。架构：[architecture.md](./architecture.md)。
 
 ## 注意
