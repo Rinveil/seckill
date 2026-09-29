@@ -9,6 +9,7 @@ COPY seckill-user seckill-user
 COPY seckill-activity seckill-activity
 COPY seckill-core seckill-core
 COPY seckill-order seckill-order
+COPY infra/docker/maven-settings.xml /root/.m2/settings.xml
 ARG MODULE
 RUN mvn -pl "${MODULE}" -am -DskipTests package -q
 

@@ -26,4 +26,5 @@
 ## 注意
 
 - 镜像只在本机 tag（`0.1.0`），同 tag 更新后脚本会 `rollout restart`
+- Java 镜像构建用 `infra/docker/maven-settings.xml` 走阿里云 Maven（Docker Desktop 里 Maven Central 常只有 IPv6，会 `Network is unreachable`）
 - **压测已结束**：不再跑压测；历史报告见 [test-report.md](./test-report.md)
