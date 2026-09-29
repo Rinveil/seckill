@@ -20,7 +20,10 @@ public class MallIndexReconcileJob {
         this.mallIndexReconciler = mallIndexReconciler;
     }
 
-    @Scheduled(fixedDelayString = "${seckill.search.elasticsearch.reconcile-ms:120000}")
+    @Scheduled(
+            initialDelayString = "${seckill.search.elasticsearch.reconcile-ms:120000}",
+            fixedDelayString = "${seckill.search.elasticsearch.reconcile-ms:120000}"
+    )
     public void scan() {
         try {
             mallIndexReconciler.reconcile();

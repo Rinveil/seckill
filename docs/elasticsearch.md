@@ -92,7 +92,7 @@ Lucene 先写 buffer，`refresh`（默认 1s）后才能被搜到。不是 MySQL
 
 1. 双写失败只打日志，活动事务已提交  
 2. 启动 `MallIndexSyncRunner` 全量覆盖  
-3. `seckill.schedule.enabled=true` 时 `MallIndexReconcileJob` 每 120s 再覆盖，并删掉 ES 里已不该存在的文档（DRAFT / 已删）  
+3. `seckill.schedule.enabled=true` 时 `MallIndexReconcileJob` 启动 120s 后每 120s 再覆盖，并删掉 ES 里已不该存在的文档（DRAFT / 已删）；与启动对账串行，避免并发 rebuild  
 4. 查询侧 `must_not status=DRAFT`，hydrate 再用 MySQL 丢掉草稿/已删行  
 
 口述：搜索允许短暂不一致；库存不允许。所以搜索双写失败 **不能回滚活动**。

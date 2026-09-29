@@ -111,7 +111,7 @@ public class MallActivityIndex {
         runWithRetry("delete mall index doc", () -> deleteOnce(id, Refresh.WaitFor), id);
     }
 
-    public void reindex(List<Activity> activities) {
+    public synchronized void reindex(List<Activity> activities) {
         ElasticsearchClient es = requireClient();
         if (es == null) {
             return;
