@@ -12,9 +12,6 @@
           <el-menu-item index="/ops/orders">订单管理</el-menu-item>
           <el-menu-item index="/ops/users">用户管理</el-menu-item>
         </el-menu-item-group>
-        <el-menu-item-group v-if="admin" title="休闲">
-          <el-menu-item index="/ops/game">小游戏</el-menu-item>
-        </el-menu-item-group>
         <el-menu-item-group title="购物">
           <el-menu-item index="/seckill">秒杀会场</el-menu-item>
           <el-menu-item index="/my/orders">我的订单</el-menu-item>
@@ -53,7 +50,6 @@ const active = computed(() => {
   if (route.path.startsWith('/ops/orders')) return '/ops/orders'
   if (route.path.startsWith('/ops/users')) return '/ops/users'
   if (route.path.startsWith('/ops/activities')) return '/ops/activities'
-  if (route.path.startsWith('/ops/game')) return '/ops/game'
   if (route.path.startsWith('/my/orders')) return '/my/orders'
   if (route.path.startsWith('/seckill')) return '/seckill'
   return route.path

@@ -21,7 +21,6 @@ import Mall from './views/Mall.vue'
 import MallDetail from './views/MallDetail.vue'
 import MyOrders from './views/MyOrders.vue'
 import Dashboard from './views/Dashboard.vue'
-import MiniGame from './views/MiniGame.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -39,7 +38,6 @@ const router = createRouter({
         { path: 'ops/orders', component: OrderManage, meta: { admin: true } },
         { path: 'ops/users', component: UserManage, meta: { admin: true } },
         { path: 'ops/dashboard', component: Dashboard, meta: { admin: true } },
-        { path: 'ops/game', component: MiniGame, meta: { admin: true } },
         { path: 'my/orders', component: MyOrders },
         { path: 'seckill', component: SeckillHome },
         { path: 'seckill/activity/:id', component: Activity },
